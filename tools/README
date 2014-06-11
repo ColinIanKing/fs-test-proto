@@ -1,0 +1,29 @@
+FlameGraphing:
+
+execute diffent tests: -x testname
+  wr_seq    - Write Sequential
+  wr_rnd    - Write Random
+  rd_seq    - Read Sequential
+  rd_rnd    - Read Random
+  rdwr_rnd  - Read+Write Random
+  rewr_seq  - Rewrite Sequentual
+  wr_many   - Write Many
+  noop      - No I/O ops
+
+test file size: -l size
+ sizes can be in G, M, B
+
+block file size: -b size
+ sizes can be in G, M, B
+
+number of threads: -t N
+  from 1 to 99
+
+number of test repeats: -r N
+  from 1 upwards
+
+output stats to a log: -o logfile
+  can be .yaml, .csv or .json
+
+
+sudo ./flamegraph.sh  -x wr_rnd -l 1G -b 4K -t 4 -r 8 -o test.yaml
