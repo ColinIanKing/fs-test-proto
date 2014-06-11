@@ -17,8 +17,8 @@
  *
  * Author Colin Ian King,  colin.king@canonical.com
  */
-#define _GNU_SOURCE
 
+#define _GNU_SOURCE
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
@@ -37,121 +37,24 @@
 #include <sys/stat.h>
 #include <math.h>
 
+#include "fs-test.h"
+#include "fs-write-setup.h"
+#include "fs-write-seq.h"
+#include "fs-write-rnd.h"
+#include "fs-write-many.h"
+#include "fs-rewrite-seq.h"
+#include "fs-read-setup.h"
+#include "fs-read-seq.h"
+#include "fs-read-rnd.h"
+#include "fs-read-write-rnd.h"
+#include "fs-noop.h"
+#include "fs-dump-results.h"
+
 #define TEST_NAME		"write-test"
 
 #define MAX_THREADS		99
 
-#define OPT_BLOCK_SIZE		(0x00000001)
-#define OPT_FILE_SIZE		(0x00000002)
-#define OPT_BLOCKS		(0x00000004)
-#define OPT_STATS		(0x00000008)
-#define OPT_HUMAN_READABLE	(0x00000010)
-#define OPT_THREAD_STATS	(0x00000020)
-#define OPT_CONT		(0x00000040)
-
-typedef struct test_context_t test_context_t;
-
-typedef struct {
-	const char *op_name;
-	void *(*test) (void *);
-	int (*test_init) (test_context_t *);
-	int (*test_deinit) (test_context_t *);
-	const char *tag;
-	const char *name;
-} test_info_t;
-
-typedef struct test_context_t {
-	/* Values passed into the test */
-	uint64_t	block_size;
-	uint64_t	file_size;
-	uint64_t	per_thread_file_size;
-	uint64_t	blocks;
-	uint64_t	per_thread_blocks;
-	double		d_per_thread_blocks;
-
-	uint32_t	instance;
-	char		*filename;
-	char		*pathname;
-	int 		open_flags;
-	pthread_t	thread;
-	test_info_t	*test_info;
-	int		ret;
-
-	/* Returned value from test */
-	uint64_t	ops;
-	double		duration_s;
-	double		rate;
-	double		op_rate;
-	double		response_time_ms;
-} test_context_t;
-
-typedef enum {
-	STAT_DURATION = 0,
-	STAT_RATE,
-	STAT_OP_RATE,
-
-	STAT_MEM_TOTAL,
-	STAT_MEM_FREE,
-	STAT_MEM_AVAILABLE,
-	STAT_MEM_BUFFERS,
-	STAT_MEM_CACHED,
-	STAT_MEM_DIRTY,
-	STAT_MEM_WRITEBACK,
-
-	STAT_RESPONSE_TIME,
-	STAT_READS_COMPLETED,
-	STAT_READS_MERGED,
-	STAT_SECTORS_READ,
-	STAT_READ_TIME_MS,
-	STAT_WRITES_COMPLETED,
-	STAT_WRITES_MERGED,
-	STAT_SECTORS_WRITTEN,
-	STAT_WRITE_TIME_MS,
-	STAT_IO_IN_PROGRESS,
-	STAT_IO_TIME_SPENT_MS,
-	STAT_IO_TIME_SPENT_WEIGHTED_MS,
-
-	STAT_PID_IO_RCHAR,
-	STAT_PID_IO_WCHAR,
-	STAT_PID_IO_SYSCR,
-	STAT_PID_IO_SYSCW,
-	STAT_PID_IO_READ,
-	STAT_PID_IO_WRITE,
-	STAT_PID_IO_CANCEL_WRITE,
-
-	STAT_PID_UTIME,
-	STAT_PID_STIME,
-	STAT_PID_TTIME,
-
-	STAT_SLAB_BLKDEV_QUEUE,
-	STAT_SLAB_BLKDEV_REQUESTS,
-	STAT_SLAB_BDEV_CACHE,
-	STAT_SLAB_BUFFER_HEAD,
-	STAT_SLAB_INODE_CACHE,
-	STAT_SLAB_DENTRY_CACHE,
-
-	STAT_MAX_VAL,
-	STAT_NULL
-} stat_val_t;
-
-typedef enum {
-	STAT_MIN = 0,
-	STAT_MAX,
-	STAT_AVERAGE,
-	STAT_STDDEV,
-	STAT_RESULT_MAX
-} stat_result_t;
-
-typedef struct {
-	stat_val_t stat;
-	const char *label;
-	const char *units;
-	const double scale;
-	const bool delta;
-	const bool ignore;
-} stat_table_t;
-
-static const stat_table_t stat_table[] = {
+const stat_table_t stat_table[] = {
 	{ STAT_DURATION,	"Duration",		"secs",		1.0,	false,	false },
 	{ STAT_RATE,		"Rate",			"MB/sec", 1048576.0, 	false,	false },
 	{ STAT_OP_RATE,		"Op-Rate",		"Ops/sec",	1.0, 	false,	false },
@@ -182,9 +85,9 @@ static const stat_table_t stat_table[] = {
 	{ STAT_NULL,		"",			"",		1.0,	false,	false },
 
 	{ STAT_RESPONSE_TIME,	"Response Time",	"us",	     0.001,	true,	false },
-	{ STAT_IO_IN_PROGRESS,	"I/O In Progress",	NULL,		1.0,	true,	true },
-	{ STAT_IO_TIME_SPENT_MS, "I/O Time Spent",	"ms",		1.0,	true,	false },
-	{ STAT_IO_TIME_SPENT_WEIGHTED_MS, "I/O Time Spent (Weighted)", "ms",	1.0,	true,	true },
+	{ STAT_IO_IN_PROGRESS,	"IO In Progress",	NULL,		1.0,	true,	true },
+	{ STAT_IO_TIME_SPENT_MS, "IO Time Spent",	"ms",		1.0,	true,	false },
+	{ STAT_IO_TIME_SPENT_WEIGHTED_MS, "IO Time Spent (Weighted)", "ms",	1.0,	true,	true },
 	{ STAT_NULL,		"",			"",		1.0,	false,	false },
 
 	{ STAT_SLAB_BLKDEV_QUEUE, "Slab Blkdev Queue Objs", NULL,	1.0,	true,	false },
@@ -206,16 +109,25 @@ static const stat_table_t stat_table[] = {
 	{ STAT_MAX_VAL,		NULL,			NULL,		1.0,	false,	false }
 };
 
-typedef struct {
-	double		val[STAT_MAX_VAL];
-} stat_t;
+static test_info_t test_info[] = {
+	{ "Write",	write_seq,	write_init,	write_deinit,	"wr_seq",	"Write Sequential" },
+	{ "Write",	write_rnd,	write_init,	write_deinit,	"wr_rnd",	"Write Random" },
+	{ "Read",	read_seq,	read_init,	read_deinit,	"rd_seq",	"Read Sequential" },
+	{ "Read",	read_rnd,	read_init,	read_deinit,	"rd_rnd",	"Read Random" },
+	{ "Rd+Wr",	read_write_rnd,	read_init,	read_deinit,	"rdwr_rnd",	"Read+Write Random" },
+	{ "Rewrite",	rewrite_seq,	write_init,	write_deinit,	"rewr_seq",	"Rewrite Sequentual" },
+	{ "WrMany",	write_many,	NULL,		NULL,		"wr_many",	"Write Many" },
+	{ "Noop",	noop,		NULL,		NULL,		"noop",		"No I/O ops" },
+	{ NULL,		NULL,		NULL,		NULL,		NULL,		NULL }
+};
 
 typedef struct {
 	const char ch;		/* Scaling suffix */
 	const uint64_t scale;	/* Amount to scale by */
 } scale_t;
 
-static unsigned int opt_flags = OPT_CONT;
+unsigned int opt_flags = OPT_CONT;
+static char *opt_ofilename = NULL;
 
 static void init_stats(stat_t *stat_vals)
 {
@@ -460,7 +372,7 @@ static int read_slab_stat(stat_t *stat_vals)
  *	fast psuedo random number generator, see
  *	http://www.cse.yorku.ca/~oz/marsaglia-rng.html
  */
-static uint32_t mwc(uint32_t *z, uint32_t *w)
+uint32_t mwc(uint32_t *z, uint32_t *w)
 {
 	*z = 36969 * (*z & 65535) + (*z >> 16);
 	*w = 18000 * (*w & 65535) + (*w >> 16);
@@ -542,18 +454,6 @@ static char *size_to_str(const double val, const char *fmt, char *buf, size_t le
 
 		return buf;
 	}
-}
-
-/*
- *  timeval_to_double()
- *	convert timeval to seconds as a double
- */
-static inline double timeval_to_double(void)
-{
-	struct timeval tv;
-
-	gettimeofday(&tv, NULL);
-	return (double)tv.tv_sec + ((double)tv.tv_usec / 1000000.0);
 }
 
 /*
@@ -652,609 +552,6 @@ static uint64_t get_u64_byte(const char *const str)
 	return get_u64_scale(str, scales, "length");
 }
 
-static int write_init(test_context_t *test)
-{
-	int fd;
-
-	/* Start off with clean file */
-	(void)unlink(test->filename);
-	fd = creat(test->filename, S_IRUSR | S_IWUSR);
-	if (fd < 0) {
-		fprintf(stderr, "Cannot create file %s: %d %s\n",
-			test->filename, errno, strerror(errno));
-		return -errno;
-	}
-	(void)close(fd);
-	(void)sync();
-
-	return 0;
-}
-
-static int write_deinit(test_context_t *test)
-{
-	(void)unlink(test->filename);
-	return 0;
-}
-
-static void *write_seq(void *ctxt)
-{
-	void *buffer;
-	int fd;
-	double time_start, time_end;
-	uint64_t fs, ops = 0;
-	test_context_t *test = (test_context_t *)ctxt;
-
-	test->ret = 0;
-
-	fd = open(test->filename, O_WRONLY | test->open_flags, S_IRUSR | S_IWUSR);
-	if (fd < 0) {
-		fprintf(stderr, "Cannot open for writing: %s: %d %s\n",
-			test->filename, errno, strerror(errno));
-		test->ret = -errno;
-		return NULL;
-	}
-	if (lseek(fd, (off_t)(test->instance * test->per_thread_file_size), SEEK_SET) < 0) {
-		fprintf(stderr, "Cannot seek: %s: %d %s\n",
-			test->filename, errno, strerror(errno));
-		test->ret = -errno;
-		close(fd);
-		return NULL;
-	}
-
-	if (posix_memalign(&buffer, 4096, (size_t)test->block_size) < 0) {
-		fprintf(stderr, "Cannot allocate block buffer: %d %s\n",
-			errno, strerror(errno));
-		test->ret = -ENOMEM;
-		close(fd);
-		return NULL;
-	}
-
-	memset(buffer, test->instance & 0xff, test->block_size);
-
-	time_start = timeval_to_double();
-	fs = test->per_thread_file_size;
-
-	while ((opt_flags & OPT_CONT) && (fs != 0)) {
-		size_t sz = fs > test->block_size ? test->block_size : fs;
-		ssize_t n = write(fd, buffer, sz);
-		if (n < 0) {
-			fprintf(stderr, "Write failed: %d %s\n",
-				errno, strerror(errno));
-			test->ret = -errno;
-			goto out;
-		}
-		fs -= n;
-		ops++;
-	}
-
-	time_end = timeval_to_double();
-	test->duration_s = time_end - time_start;
-	test->response_time_ms = 1000 * test->duration_s / (double)test->blocks;
-	test->rate = (double)test->per_thread_file_size / test->duration_s;
-	test->ops = ops;
-	test->op_rate = (double)ops / test->duration_s;
-
-out:
-	free(buffer);
-	close(fd);
-
-	return NULL;
-}
-
-static void *write_rnd(void *ctxt)
-{
-	test_context_t *test = (test_context_t *)ctxt;
-	void *buffer;
-	int fd;
-	double time_start, time_end;
-	uint64_t fs, ops = 0;
-	uint32_t z = 362436069, w = 521288629 + test->instance;
-	off_t  offset = (off_t)(test->instance * test->per_thread_file_size);
-
-	test->ret = 0;
-
-	fd = open(test->filename, O_WRONLY | test->open_flags, S_IRUSR | S_IWUSR);
-	if (fd < 0) {
-		fprintf(stderr, "Cannot open for writing: %s: %d %s\n",
-			test->filename, errno, strerror(errno));
-		test->ret = -errno;
-		return NULL;
-	}
-	if (posix_memalign(&buffer, 4096, (size_t)test->block_size) < 0) {
-		fprintf(stderr, "Cannot allocate block buffer: %d %s\n",
-			errno, strerror(errno));
-		test->ret = -ENOMEM;
-		close(fd);
-		return NULL;
-	}
-
-	memset(buffer, test->instance & 0xff, test->block_size);
-
-	time_start = timeval_to_double();
-	fs = test->per_thread_file_size;
-
-	while ((opt_flags & OPT_CONT) && (fs != 0)) {
-		size_t sz = fs > test->block_size ? test->block_size : fs;
-		ssize_t n;
-		uint32_t r_mwc = mwc(&z, &w);
-		off_t  offset_rnd = offset +
-			((r_mwc % test->per_thread_blocks) * test->block_size);
-
-		if (lseek(fd, offset_rnd, SEEK_SET) < 0) {
-			fprintf(stderr, "Cannot seek: %s: %d %s\n",
-				test->filename, errno, strerror(errno));
-			test->ret = -errno;
-			close(fd);
-			return NULL;
-		}
-
-		n = write(fd, buffer, sz);
-		if (n < 0) {
-			fprintf(stderr, "Write failed: %d %s\n",
-				errno, strerror(errno));
-			test->ret = -errno;
-			goto out;
-		}
-		fs -= n;
-		ops++;
-	}
-
-	time_end = timeval_to_double();
-	test->duration_s = time_end - time_start;
-	test->response_time_ms = 1000 * test->duration_s / (double)test->blocks;
-	test->rate = (double)test->per_thread_file_size / test->duration_s;
-	test->ops = ops;
-	test->op_rate = (double)ops / test->duration_s;
-
-out:
-	free(buffer);
-	close(fd);
-
-	return NULL;
-}
-
-static int read_init(test_context_t *test)
-{
-	int fd, rc = 0;
-	void *buffer;
-	uint64_t fs = test->file_size;
-
-#define BUF_SIZE	(128 * 1024)
-
-	/* Start off with clean already existing file */
-	(void)unlink(test->filename);
-	fd = open(test->filename, O_WRONLY | O_CREAT,  S_IRUSR | S_IWUSR);
-	if (fd < 0) {
-		fprintf(stderr, "Cannot open for writing: %s: %d %s\n",
-			test->filename, errno, strerror(errno));
-		return -errno;
-	}
-	if (posix_memalign(&buffer, 4096, BUF_SIZE) < 0) {
-		fprintf(stderr, "Cannot allocate block buffer: %d %s\n",
-			errno, strerror(errno));
-		close(fd);
-		return -ENOMEM;
-	}
-
-	memset(buffer, 0xff, BUF_SIZE);
-
-	while ((opt_flags & OPT_CONT) && (fs != 0)) {
-		size_t sz = fs > BUF_SIZE ? BUF_SIZE : fs;
-		ssize_t n = write(fd, buffer, sz);
-		if (n < 0) {
-			fprintf(stderr, "Write failed: %d %s\n",
-				errno, strerror(errno));
-			rc = -errno;
-			break;
-		}
-		fs -= n;
-	}
-
-	(void)close(fd);
-	free(buffer);
-
-	return rc;
-
-#undef BUF_SIZE
-}
-
-static int read_deinit(test_context_t *test)
-{
-	(void)unlink(test->filename);
-	return 0;
-}
-
-static void *read_seq(void *ctxt)
-{
-	void *buffer;
-	int fd;
-	double time_start, time_end;
-	uint64_t fs, ops = 0;
-	test_context_t *test = (test_context_t *)ctxt;
-
-	test->ret = 0;
-
-	fd = open(test->filename, O_RDONLY | test->open_flags, S_IRUSR);
-	if (fd < 0) {
-		fprintf(stderr, "Cannot open for read: %s: %d %s\n",
-			test->filename, errno, strerror(errno));
-		test->ret = -errno;
-		return NULL;
-	}
-	if (lseek(fd, (off_t)(test->instance * test->per_thread_file_size), SEEK_SET) < 0) {
-		fprintf(stderr, "Cannot seek: %s: %d %s\n",
-			test->filename, errno, strerror(errno));
-		test->ret = -errno;
-		close(fd);
-		return NULL;
-	}
-
-	if (posix_memalign(&buffer, 4096, (size_t)test->block_size) < 0) {
-		fprintf(stderr, "Cannot allocate block buffer: %d %s\n",
-			errno, strerror(errno));
-		test->ret = -ENOMEM;
-		close(fd);
-		return NULL;
-	}
-
-	time_start = timeval_to_double();
-	fs = test->per_thread_file_size;
-
-	while ((opt_flags & OPT_CONT) && (fs != 0)) {
-		size_t sz = fs > test->block_size ? test->block_size : fs;
-		ssize_t n = read(fd, buffer, sz);
-		if (n < 0) {
-			fprintf(stderr, "Read failed: %d %s\n",
-				errno, strerror(errno));
-			test->ret = -errno;
-			goto out;
-		}
-		fs -= n;
-		ops++;
-	}
-
-	time_end = timeval_to_double();
-	test->duration_s = time_end - time_start;
-	test->response_time_ms = 1000 * test->duration_s / (double)test->blocks;
-	test->rate = (double)test->per_thread_file_size / test->duration_s;
-	test->ops = ops;
-	test->op_rate = (double)ops / test->duration_s;
-
-out:
-	free(buffer);
-	close(fd);
-
-	return NULL;
-}
-
-static void *read_rnd(void *ctxt)
-{
-	test_context_t *test = (test_context_t *)ctxt;
-	void *buffer;
-	int fd;
-	double time_start, time_end;
-	uint64_t fs, ops = 0;
-	uint32_t z = 362436069, w = 521288629 + test->instance;
-	off_t  offset = (off_t)(test->instance * test->per_thread_file_size);
-
-	test->ret = 0;
-
-	fd = open(test->filename, O_RDONLY | test->open_flags, S_IRUSR | S_IWUSR);
-	if (fd < 0) {
-		fprintf(stderr, "Cannot open for reading: %s: %d %s\n",
-			test->filename, errno, strerror(errno));
-		test->ret = -errno;
-		return NULL;
-	}
-	if (posix_memalign(&buffer, 4096, (size_t)test->block_size) < 0) {
-		fprintf(stderr, "Cannot allocate block buffer: %d %s\n",
-			errno, strerror(errno));
-		test->ret = -ENOMEM;
-		close(fd);
-		return NULL;
-	}
-
-	memset(buffer, test->instance & 0xff, test->block_size);
-
-	time_start = timeval_to_double();
-	fs = test->per_thread_file_size;
-
-	while ((opt_flags & OPT_CONT) && (fs != 0)) {
-		size_t sz = fs > test->block_size ? test->block_size : fs;
-		ssize_t n;
-		uint32_t r_mwc = mwc(&z, &w);
-		off_t  offset_rnd = offset +
-			((r_mwc % test->per_thread_blocks) * test->block_size);
-
-		if (lseek(fd, offset_rnd, SEEK_SET) < 0) {
-			fprintf(stderr, "Cannot seek: %s: %d %s\n",
-				test->filename, errno, strerror(errno));
-			test->ret = -errno;
-			close(fd);
-			return NULL;
-		}
-
-		n = read(fd, buffer, sz);
-		if (n < 0) {
-			fprintf(stderr, "Read failed: %d %s\n",
-				errno, strerror(errno));
-			test->ret = -errno;
-			goto out;
-		}
-		fs -= n;
-		ops++;
-	}
-
-	time_end = timeval_to_double();
-	test->duration_s = time_end - time_start;
-	test->response_time_ms = 1000 * test->duration_s / (double)test->blocks;
-	test->rate = (double)test->per_thread_file_size / test->duration_s;
-	test->ops = ops;
-	test->op_rate = (double)ops / test->duration_s;
-
-out:
-	free(buffer);
-	close(fd);
-
-	return NULL;
-}
-
-static void *read_write_rnd(void *ctxt)
-{
-	test_context_t *test = (test_context_t *)ctxt;
-	void *buffer;
-	int fd;
-	double time_start, time_end;
-	uint64_t fs, ops = 0;
-	uint32_t z = 362436069, w = 521288629 + test->instance;
-	off_t  offset = (off_t)(test->instance * test->per_thread_file_size);
-
-	test->ret = 0;
-
-	fd = open(test->filename, O_RDWR | test->open_flags, S_IRUSR | S_IWUSR);
-	if (fd < 0) {
-		fprintf(stderr, "Cannot open for reading and writing: %s: %d %s\n",
-			test->filename, errno, strerror(errno));
-		test->ret = -errno;
-		return NULL;
-	}
-	if (posix_memalign(&buffer, 4096, (size_t)test->block_size) < 0) {
-		fprintf(stderr, "Cannot allocate block buffer: %d %s\n",
-			errno, strerror(errno));
-		test->ret = -ENOMEM;
-		close(fd);
-		return NULL;
-	}
-
-	memset(buffer, test->instance & 0xff, test->block_size);
-
-	time_start = timeval_to_double();
-	fs = test->per_thread_file_size;
-
-	while ((opt_flags & OPT_CONT) && (fs != 0)) {
-		size_t sz = fs > test->block_size ? test->block_size : fs;
-		ssize_t n;
-		uint32_t r_mwc = mwc(&z, &w);
-		off_t  offset_rnd = offset +
-			((r_mwc % test->per_thread_blocks) * test->block_size);
-
-		if (lseek(fd, offset_rnd, SEEK_SET) < 0) {
-			fprintf(stderr, "Cannot seek: %s: %d %s\n",
-				test->filename, errno, strerror(errno));
-			test->ret = -errno;
-			close(fd);
-			return NULL;
-		}
-
-		if ((mwc(&z, &w) & 255) > 127) {
-			n = write(fd, buffer, sz);
-			if (n < 0) {
-				fprintf(stderr, "Write failed: %d %s\n",
-					errno, strerror(errno));
-				test->ret = -errno;
-				goto out;
-			}
-		} else {
-			n = read(fd, buffer, sz);
-			if (n < 0) {
-				fprintf(stderr, "Read failed: %d %s\n",
-					errno, strerror(errno));
-				test->ret = -errno;
-				goto out;
-			}
-		}
-		fs -= sz;
-		ops++;
-	}
-
-	time_end = timeval_to_double();
-	test->duration_s = time_end - time_start;
-	test->response_time_ms = 1000 * test->duration_s / (double)test->blocks;
-	test->rate = (double)test->per_thread_file_size / test->duration_s;
-	test->ops = ops;
-	test->op_rate = (double)ops / test->duration_s;
-
-out:
-	free(buffer);
-	close(fd);
-
-	return NULL;
-}
-
-static void *rewrite_seq(void *ctxt)
-{
-	void *buffer;
-	int fd;
-	double time_start, time_end;
-	uint64_t fs, ops = 0;
-	test_context_t *test = (test_context_t *)ctxt;
-	int i;
-
-	test->ret = 0;
-
-	fd = open(test->filename, O_WRONLY | test->open_flags, S_IRUSR | S_IWUSR);
-	if (fd < 0) {
-		fprintf(stderr, "Cannot open for writing: %s: %d %s\n",
-			test->filename, errno, strerror(errno));
-		test->ret = -errno;
-		return NULL;
-	}
-	if (lseek(fd, (off_t)(test->instance * test->per_thread_file_size), SEEK_SET) < 0) {
-		fprintf(stderr, "Cannot seek: %s: %d %s\n",
-			test->filename, errno, strerror(errno));
-		test->ret = -errno;
-		close(fd);
-		return NULL;
-	}
-
-	if (posix_memalign(&buffer, 4096, (size_t)test->block_size) < 0) {
-		fprintf(stderr, "Cannot allocate block buffer: %d %s\n",
-			errno, strerror(errno));
-		test->ret = -ENOMEM;
-		close(fd);
-		return NULL;
-	}
-
-	memset(buffer, test->instance & 0xff, test->block_size);
-
-	time_start = timeval_to_double();
-
-	for (i = 0; i < 2; i++) {
-		fs = test->per_thread_file_size;
-		while ((opt_flags & OPT_CONT) && (fs != 0)) {
-			size_t sz = fs > test->block_size ? test->block_size : fs;
-			ssize_t n = write(fd, buffer, sz);
-			if (n < 0) {
-				fprintf(stderr, "Write failed: %d %s\n",
-					errno, strerror(errno));
-				test->ret = -errno;
-				goto out;
-			}
-			fs -= n;
-			ops++;
-		}
-	}
-
-	time_end = timeval_to_double();
-	test->duration_s = time_end - time_start;
-	test->response_time_ms = 1000 * test->duration_s / (double)test->blocks;
-	test->rate = (double)test->per_thread_file_size / test->duration_s;
-	test->ops = ops;
-	test->op_rate = (double)ops / test->duration_s;
-
-out:
-	free(buffer);
-	close(fd);
-
-	return NULL;
-}
-
-static void mk_filename(uint32_t *z, uint32_t *w, char *path, char *filename, size_t len)
-{
-	size_t i;
-	char *ptr;
-
-	ptr = filename + snprintf(filename, len, "%s/temp-%d-", path, getpid());
-
-	for (i = 0; i < len - 1; i++)
-		*ptr++ = 'a' + mwc(z, w) % 26;
-
-	*ptr = '\0';
-}
-
-static void *write_many(void *ctxt)
-{
-	void *buffer;
-	int fd;
-	double time_start, time_end;
-	uint64_t fs, ops = 0;
-	test_context_t *test = (test_context_t *)ctxt;
-	uint32_t z, w;
-	char filename[PATH_MAX];
-	int i, count = 0;
-
-	test->ret = 0;
-	if (posix_memalign(&buffer, 4096, (size_t)test->block_size) < 0) {
-		fprintf(stderr, "Cannot allocate block buffer: %d %s\n",
-			errno, strerror(errno));
-		test->ret = -ENOMEM;
-		return NULL;
-	}
-	memset(buffer, test->instance & 0xff, test->block_size);
-	fs = test->per_thread_file_size;
-
-	time_start = timeval_to_double();
-
-	z = 362436069;
-	w = 521288629 + test->instance;
-	while ((opt_flags & OPT_CONT) && (fs != 0)) {
-		uint64_t bytes = test->block_size * (1 + (count & 31));
-		size_t len = 16 + (count & 63);
-		mk_filename(&z, &w, test->pathname, filename, len);
-
-		fd = open(filename, O_WRONLY | O_CREAT | O_TRUNC | test->open_flags, S_IRUSR | S_IWUSR);
-		if (fd < 0) {
-			fprintf(stderr, "Cannot open for writing: %s: %d %s\n",
-				test->filename, errno, strerror(errno));
-			test->ret = -errno;
-			free(buffer);
-			return NULL;
-		}
-
-		if (bytes > fs)
-			bytes = fs;
-
-		fs -= bytes;
-
-		while (bytes != 0) {
-			size_t sz = bytes > test->block_size ? test->block_size : bytes;
-			ssize_t n = write(fd, buffer, sz);
-			if (n < 0) {
-				fprintf(stderr, "Write failed: %d %s\n",
-					errno, strerror(errno));
-				test->ret = -errno;
-				close(fd);
-				goto out;
-			}
-			bytes -= n;
-			ops++;
-		}
-		fsync(fd);
-		close(fd);
-		count++;
-	}
-
-	time_end = timeval_to_double();
-	test->duration_s = time_end - time_start;
-	test->response_time_ms = 1000 * test->duration_s / (double)test->blocks;
-	test->rate = (double)test->per_thread_file_size / test->duration_s;
-	test->ops = ops;
-	test->op_rate = (double)ops / test->duration_s;
-
-	z = 362436069;
-	w = 521288629 + test->instance;
-	for (i = 0; i < count; i++) {
-		size_t len = 16 + (i & 63);
-		mk_filename(&z, &w, test->pathname, filename, len);
-		unlink(filename);
-	}
-
-out:
-	free(buffer);
-
-	return NULL;
-}
-
-static test_info_t test_info[] = {
-	{ "Write",	write_seq,	write_init,	write_deinit,	"wr_seq",	"Write Sequential" },
-	{ "Write",	write_rnd,	write_init,	write_deinit,	"wr_rnd",	"Write Random" },
-	{ "Read",	read_seq,	read_init,	read_deinit,	"rd_seq",	"Read Sequential" },
-	{ "Read",	read_rnd,	read_init,	read_deinit,	"rd_rnd",	"Read Random" },
-	{ "Rd+Wr",	read_write_rnd,	read_init,	read_deinit,	"rdwr_rnd",	"Read+Write Random" },
-	{ "Rewrite",	rewrite_seq,	write_init,	write_deinit,	"rewr_seq",	"Rewrite Sequentual" },
-	{ "WrMany",	write_many,	NULL,		NULL,		"wr_many",	"Write Many" },
-	{ NULL,		NULL,		NULL,		NULL,		NULL,		NULL }
-};
 
 void calculate_stats(
 	uint32_t repeats,
@@ -1354,7 +651,7 @@ int main(int argc, char **argv)
 	memset(&test, 0, sizeof(test));
 
 	for (;;) {
-		int c = getopt(argc, argv, "adsb:l:n:hHp:r:t:Tx:");
+		int c = getopt(argc, argv, "adsb:l:n:hHp:r:t:Tx:o:");
 		if (c == -1)
 			break;
 		switch (c) {
@@ -1395,6 +692,9 @@ int main(int argc, char **argv)
 		case 'n':
 			test.blocks = get_u64(optarg);
 			opt_flags |= OPT_BLOCKS;
+			break;
+		case 'o':
+			opt_ofilename = optarg;
 			break;
 		case 'p':
 			pathname = optarg;
@@ -1604,6 +904,9 @@ int main(int argc, char **argv)
 			printf("%12.3f ", results[i].val[s]);
 		printf("\n");
 	}
+
+	if (opt_ofilename)
+		dump_results(opt_ofilename, results);
 
 out:
 	free(stat_vals);
