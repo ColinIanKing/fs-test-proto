@@ -27,3 +27,10 @@ output stats to a log: -o logfile
 
 
 sudo ./flamegraph.sh  -x wr_rnd -l 1G -b 4K -t 4 -r 8 -o test.yaml
+
+HeatMapping:
+
+same args as above, instead use:
+
+sudo ./heatmap.sh  -x wr_rnd -l 1G -b 4K -t 4 -r 8 -o test.yaml
+
