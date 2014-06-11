@@ -18,7 +18,7 @@ then
 	echo "Need to run as root to drive perf"
 	exit 1
 fi
-perf record -F ${PERF_FREQ} -g -- ${FS_TEST} $* -H -p .
+perf record -F ${PERF_FREQ} -g -- ${FS_TEST} $* 
 perf script | ./${FLAMEGRAPH}/stackcollapse-perf.pl > ${FOLDED}
 ./${FLAMEGRAPH}/flamegraph.pl --width=${SVG_WIDTH} < ${FOLDED} > ${SVG_FILE}
 rm ${FOLDED} perf.data

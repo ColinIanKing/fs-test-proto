@@ -25,12 +25,16 @@ number of test repeats: -r N
 output stats to a log: -o logfile
   can be .yaml, .csv or .json
 
+human readable stats: -H
 
-sudo ./flamegraph.sh  -x wr_rnd -l 1G -b 4K -t 4 -r 8 -o test.yaml
+path to mounted directory on device to test: -p path
+
+
+sudo ./flamegraph.sh  -x wr_rnd -l 1G -b 4K -t 4 -r 8 -o test.yaml -H -p /mnt/testdir
 
 HeatMapping:
 
 same args as above, instead use:
 
-sudo ./heatmap.sh  -x wr_rnd -l 1G -b 4K -t 4 -r 8 -o test.yaml
+sudo ./heatmap.sh  -x wr_rnd -l 1G -b 4K -t 4 -r 8 -o test.yaml -H -p /mnt/testdir
 

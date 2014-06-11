@@ -21,7 +21,7 @@ fi
 #
 # From http://www.brendangregg.com/perf.html
 #
-perf record -e block:block_rq_issue -e block:block_rq_complete ${FS_TEST} $* -H -p .
+perf record -e block:block_rq_issue -e block:block_rq_complete ${FS_TEST} $*
 perf script | awk '{ gsub(/:/, "") } $5 ~ /issue/ { ts[$6, $10] = $4 }
     $5 ~ /complete/ { if (l = ts[$6, $9]) { printf "%.f %.f\n", $4 * 1000000,
     ($4 - l) * 1000000; ts[$6, $10] = 0 } }' > ${LATENCY_US}
