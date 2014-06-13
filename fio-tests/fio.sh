@@ -39,6 +39,11 @@ SIZE=${SIZE:-${MEM_TOTAL_DOUBLE_KB}K}
 # No blocksize, default to 4K
 #
 BLOCKSIZE=${BLOCKSIZE:-4K}
+#
+# No iterations set, default to 5 so we can calc std.dev.
+# on the fio-stats data on the -s stats test
+#
+LOOPS=${LOOPS:-5}
 
 #
 # Dump info about the system we are running the test on
@@ -75,11 +80,11 @@ log_job_info()
 {
 	JOB_INFO=${RESULTS_PATH}/sysinfo.log
 	sys_info > ${JOB_INFO}
-	fs_info >> {JOB_INFO}
-	echo "free:" >> {JOB_INFO}
-	free >> {JOB_INFO}
-	echo "df:" >> {JOB_INFO}
-	df >> {JOB_INFO}
+	fs_info >> ${JOB_INFO}
+	echo "free:" >> ${JOB_INFO}
+	free >> ${JOB_INFO}
+	echo "df:" >> ${JOB_INFO}
+	df >> ${JOB_INFO}
 }
 
 stats()
@@ -93,7 +98,17 @@ stats()
 	      ${RESULTS_PATH}/${JOB}_iops.log \
 	      ${RESULTS_PATH}/${JOB}_lat.log \
 	      ${RESULTS_PATH}/${JOB}_slat.log
-	fio $* ${ROOT_PATH}/jobs/${JOB} --output=${RESULTS_PATH}/fio-stats.log
+	#
+	# Run the test multiple times and accumulate fio-stats.log 
+	#
+	for I in $(seq ${LOOPS})
+	do
+		echo "fio iteration $I of ${LOOPS}"
+		fio $* ${ROOT_PATH}/jobs/${JOB} --output=${RESULTS_PATH}/fio-stats-$I.log
+	done
+	#
+	# TODO: calc std.dev. on specific fields on file-stats-*.log
+	#
 	echo "Generating plots.."
 	fio_generate_plots ${JOB} >& /dev/null
 }
