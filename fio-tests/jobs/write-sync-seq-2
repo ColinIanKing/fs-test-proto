@@ -1,0 +1,26 @@
+[global]
+name=write-sync-seq
+description=sequential synchronous write
+rw=write
+blocksize=${BLOCKSIZE}
+directory=${DIRECTORY}
+size=${SIZE}
+numjobs=1
+fallocate=none
+invalidate=1
+unlink=1
+fadvise_hint=1
+clat_percentiles=1
+disk_util=1
+mem_align=1
+group_reporting=1
+
+[job1]
+write_bw_log=job1
+write_lat_log=job1
+write_iops_log=job1
+
+[job2]
+write_bw_log=job2
+write_lat_log=job2
+write_iops_log=job2
