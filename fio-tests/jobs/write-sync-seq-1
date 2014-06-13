@@ -5,7 +5,6 @@ rw=write
 blocksize=${BLOCKSIZE}
 directory=${DIRECTORY}
 size=${SIZE}
-numjobs=1
 fallocate=none
 invalidate=1
 unlink=1
