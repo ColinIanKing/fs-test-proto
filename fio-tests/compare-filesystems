@@ -1,0 +1,291 @@
+#!/usr/bin/python
+#
+# Copyright (C) 2014 Canonical, Ltd.
+#
+# This program is free software; you can redistribute it and/or
+# modify it under the terms of the GNU General Public License
+# as published by the Free Software Foundation; either version 2
+# of the License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
+#
+# Author: Colin Ian King <colin.king@canonical.com>
+#
+import os
+import sys
+import json
+import numpy as np
+import matplotlib.pyplot as plt
+import re
+
+if len(sys.argv) < 2:
+	sys.exit('Usage: %s results-path' % sys.argv[0])
+
+if not os.path.exists(sys.argv[1]):
+	sys.exit('Path %s not found' % sys.argv[1])
+
+def sysinfo_load(file):
+	sysinfo = {}
+
+	f = open(file, 'r')
+	for line in f.read().splitlines():
+		if ':' in line:
+			[key, val] = line.split(':',1)
+			sysinfo[key] = val.lstrip()
+	f.close()
+
+	return sysinfo
+
+def keys_variant(stats):
+	skipkeys = [ 'Time', 'Kernel-version', 'Full Date']
+	keys = []
+	for (cur, sysinfo1, fio_stats) in stats:
+		for (cur, sysinfo2, fio_stats) in stats:
+			for key in sysinfo2:
+				if not key in keys and not key in skipkeys and sysinfo1[key] != sysinfo2[key]:
+					keys.append(key)
+
+	return keys
+
+def array_to_str(array):
+	str = ""
+	for a in array:
+		if str != "":
+			str = str + ", "
+		str = str + a
+	return str
+
+def sysinfo_keys_to_title(sysinfo, keys):
+	title = ""
+	for key in keys:
+		if title != "":
+			title = title + ", "
+		title = title + key
+
+	#return title
+	return array_to_str(keys)
+
+def sysinfo_keys_to_label(sysinfo, keys):
+	label = ""
+	for key in keys:
+		if label != "":
+			label = label + ", "
+		label = label + sysinfo[key]
+
+	return label
+
+def simple_histogram_on_fs(f, sysinfo, keys, xlabels, yvalues):
+	title = f[0]
+	units = f[1]
+	title_keys = ['Job', 'Filesystem', 'Kernel-release']
+	subtitle = ""
+	for k in title_keys:
+		if not k in keys:
+			subtitle += sysinfo[k] + ", "
+
+	#subtitle += sysinfo_keys_to_title(sysinfo, keys)
+
+	fig = plt.figure(figsize=(8, 3.5 + len(xlabels) * 0.3))
+	ind = np.arange(len(yvalues))
+	plt.title(title + ": " + subtitle)
+	plt.barh(ind, yvalues, color=['red', 'green', 'yellow'])
+	plt.grid(True)
+	plt.yticks(0.25 + ind, xlabels)
+	plt.ylabel(subtitle)
+	plt.xlabel(title + " (" + units + ")")
+	plt.tight_layout()
+	plt.show()
+
+def simple_graph_samples(keys, title, data):
+	nplots = len(data)
+	title_keys = ['Job', 'Filesystem', 'Kernel-release']
+
+	fig, plots = plt.subplots(nrows=nplots, sharex=True, figsize=(7, nplots * 3))
+
+	i = 0
+	max_x = 0
+	max_y = 0
+	#
+	#  Calculate some simple stats
+	#
+	for (values, sysinfo) in data:
+		total_y = 0
+		total_n = 0
+		for (x, y) in values:
+			max_x = max(max_x, max(x))
+			max_y = max(max_y, max(y))
+			total_y += sum(y)
+			total_n += len(y)
+		if total_n == 0:
+			sysinfo['mean_y'] = 0
+		else:
+			sysinfo['mean_y'] = float(total_y) / total_n
+
+	subtitle = ""
+	for k in title_keys:
+		if not k in keys:
+			subtitle += sysinfo[k] + ", "
+
+	for (values, sysinfo) in data:
+		fs = sysinfo['Filesystem']
+		for (x, y) in values:
+			plots[i].plot(x, y, '.', color='black')
+			plots[i].set_xlabel('Sample #')
+			plots[i].set_ylabel(title)
+			plots[i].set_title(title + ', ' + subtitle + sysinfo_keys_to_label(sysinfo, keys))
+			plots[i].set_xlim(0, max_x)
+			plots[i].grid(True)
+
+		yy = sysinfo['mean_y']
+		fs = sysinfo['Filesystem']
+		x = [0, max_x ]
+		y = [yy, yy]
+		plots[i].plot(x, y, label='Mean ' + '%.4f' % yy, color='red')
+		plots[i].legend(loc = 2)
+		i = i + 1
+
+	plt.tight_layout()
+	plt.show()
+	return
+
+#
+#  TODO: Make this per test configurable
+#
+fields = [
+	[ "Disk utilisation","%",	1,    "disk_util.0.util",	simple_histogram_on_fs ],
+	[ "Write Bandwidth", "MB/sec",  1000, "jobs.0.write.bw",	simple_histogram_on_fs ],
+	[ "Write Ops",       "Ops/sec", 1,    "jobs.0.write.iops",	simple_histogram_on_fs ],
+	[ "Runtime",         "seconds",	1000, "jobs.0.write.runtime",	simple_histogram_on_fs ],
+	[ "Mean C Latency",  "ms",      1,    "jobs.0.write.clat.mean",	simple_histogram_on_fs ],
+	[ "Mean Latency",    "ms",      1,    "jobs.0.write.lat.mean",	simple_histogram_on_fs ],
+	[ "User CPU",	     "%",       1,    "jobs.0.usr_cpu",		simple_histogram_on_fs ],
+	[ "System CPU",	     "%",       1,    "jobs.0.sys_cpu",		simple_histogram_on_fs ]
+]
+
+def get_json_val(json_data, fullpath):
+	path = fullpath.split('.')
+	j = json_data
+	try:
+		for p in path:
+			if p.isdigit():
+				j = j[int(p)]
+			else:
+				j = j[p]
+		return j
+ 	except:
+		return 0
+
+
+def compare_stats_sort_key(sysinfo):
+	return sysinfo_keys_to_label(sysinfo, keys)
+
+#
+# Do statistic data gathering
+#
+def compare_stats(stats, keys):
+	for f in fields:
+		yvalues = []
+		xlabels = []
+		for (cur, sysinfo, fio_stats) in stats:
+			d = get_json_val(fio_stats, f[3])
+			yvalues.append(d / f[2])
+			xlabels.append(sysinfo_keys_to_label(sysinfo, keys))
+		#
+		# Sort based on the xlabels
+		#
+		indexes = np.argsort(xlabels)[::-1]
+		xlabels = [ xlabels[i] for i in indexes ]
+		yvalues = [ yvalues[i] for i in indexes ]
+		f[4](f, sysinfo, keys, xlabels, yvalues)
+
+#
+#  Load in fio-stats.json and sysinfo.log for the given tests
+#
+def collect_stats(path):
+	stats = []
+	for cur, _dirs, files in os.walk(path):
+		head, tail = os.path.split(cur)
+		if tail == "stats":
+			sysinfo = sysinfo_load(os.path.join(cur, 'sysinfo.log'))
+			f = open(os.path.join(cur, 'fio-stats.json'), 'r')
+			fio_stats = json.load(f)
+			f.close()
+			stats.append((cur, sysinfo, fio_stats))
+	return stats
+
+def find_matching_stats(stats, criteria):
+	matches = []
+	for (cur, sysinfo, fio_stats) in stats:
+		keep = True
+		for (key, values) in criteria:
+			if values != []:
+				found = False
+				for value in values:
+					if key in sysinfo and sysinfo[key] == value:
+						found = True
+						break
+				keep = keep and found
+		if keep:
+			print "Use data " + cur
+			matches.append((cur, sysinfo, fio_stats))
+
+	return matches
+
+def compare_samples(stats, keys, title, pattern):
+	regex = re.compile(pattern)
+	data = []
+	titles = []
+	for (cur, sysinfo, fio_stats) in stats:
+		values = []
+		for l in sorted(os.listdir(cur)):
+			x = []
+			y = []
+			for m in [regex.search(l)]:
+				if m:
+					f = open(os.path.join(cur, l), 'r')
+					for line in f.read().splitlines():
+						s = line.split(',')
+						x.append(int(s[0]))
+						y.append(int(s[1]))
+					f.close()
+					values.append((x,y))
+		data.append((values, sysinfo))
+		titles.append(sysinfo_keys_to_label(sysinfo, keys))
+
+	#
+	# Sort based on the chart titles
+	#
+	indexes = np.argsort(titles)
+	titles = [ titles[i] for i in indexes ]
+	data = [ data[i] for i in indexes ]
+
+	if len(data):
+		simple_graph_samples(keys, title, data)
+	else:
+		print "No relevant data can be found"
+
+
+stats = []
+for i in range(1, len(sys.argv)):
+	stats += collect_stats(sys.argv[i])
+
+#tests = find_matching_stats(stats, [ ('Job', ['write-sync-seq-1', 'write-sync-seq-2']), ('Filesystem', ['xfs','btrfs']), ('Kernel-release', ['3.13.0'])])
+#tests = find_matching_stats(stats, [ ('Job', []), ('Filesystem', ['xfs','btrfs']), ('Kernel-release', ['3.13.0'])])
+#tests = find_matching_stats(stats, [ ('Job', ['write-sync-seq-1', 'write-sync-seq-2']), ('Filesystem', ['xfs','btrfs']), ('Kernel-release', ['3.14.0', '3.13.0'])])
+tests = find_matching_stats(stats, [ ('Job', ['write-sync-seq-4']), ('Filesystem', []), ('Kernel-release', [])])
+keys = keys_variant(tests)
+compare_stats(tests, keys)
+compare_samples(tests, keys, 'Bandwidth', 'job.*_bw\.log')
+compare_samples(tests, keys, 'I/O ops per sec', 'job.*_iops\.log')
+compare_samples(tests, keys, 'I/O Latency', 'job.*_lat\.log')
+compare_samples(tests, keys, 'Completion Latency', 'job.*_clat\.log')
+
+
+

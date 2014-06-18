@@ -1,5 +1,5 @@
 [global]
-name=write-sync-seq
+name=write-sync-seq-1-thread
 description=sequential synchronous write
 rw=write
 blocksize=${BLOCKSIZE}

@@ -5,8 +5,11 @@ SVG_HEATMAP_FILE=heatmap.svg
 SVG_WIDTH=2048
 MEM_TOTAL_KB=$(grep MemTotal /proc/meminfo | awk {'print $2}')
 MEM_TOTAL_DOUBLE_KB=$((MEM_TOTAL_KB * 2))
-DATE_NOW=$(date +%F)
+#DATE_NOW=$(date +%F)
+DATE_NOW=2014-06-16
 TIME_NOW=$(date +%H%M)
+KERNEL=$(uname -r)
+ID=$(cat /dev/urandom | tr -dc 'a-f0-9' | fold -w 12 | head -n 1)
 
 TMP=/tmp
 
@@ -52,6 +55,8 @@ sys_info() {
 	echo "Full Date:     " $(date)
 	echo "Date:          " ${DATE_NOW}
 	echo "Time:          " ${TIME_NOW}
+	echo "Job:           " ${JOB}
+	echo "Scenario:      " ${SCENARIO}
 	echo "Nodename:      " $(uname -n)
 	echo "Kernel-release:" $(uname -r)
 	echo "Kernel-version:" $(uname -v)
@@ -81,36 +86,16 @@ log_job_info()
 	JOB_INFO=${RESULTS_PATH}/sysinfo.log
 	sys_info > ${JOB_INFO}
 	fs_info >> ${JOB_INFO}
-	echo "free:" >> ${JOB_INFO}
-	free >> ${JOB_INFO}
-	echo "df:" >> ${JOB_INFO}
-	df >> ${JOB_INFO}
+
+	sys_info
+	fs_info
 }
 
 stats()
 {
-	#
-	# Must remove old logs else we accumulate plot
-	# data and ruin fio_generate_plots
-	#
-	rm -f ${RESULTS_PATH}/${JOB}_bw.log \
-	      ${RESULTS_PATH}/${JOB}_clat.log \
-	      ${RESULTS_PATH}/${JOB}_iops.log \
-	      ${RESULTS_PATH}/${JOB}_lat.log \
-	      ${RESULTS_PATH}/${JOB}_slat.log
-	#
-	# Run the test multiple times and accumulate fio-stats.log 
-	#
-	for I in $(seq ${LOOPS})
-	do
-		echo "fio iteration $I of ${LOOPS}"
-		fio $* ${ROOT_PATH}/jobs/${JOB} --output=${RESULTS_PATH}/fio-stats-$I.log
-	done
-	#
-	# TODO: calc std.dev. on specific fields on file-stats-*.log
-	#
-	echo "Generating plots.."
-	fio_generate_plots ${JOB} >& /dev/null
+	fio $* ${ROOT_PATH}/jobs/${JOB} --output-format=json --output=${RESULTS_PATH}/fio-stats.json
+	#echo "Generating plots.."
+	#fio_generate_plots ${JOB} >& /dev/null
 }
 
 heatmap()
@@ -190,17 +175,10 @@ do
   shift
 done
 
-newopts="$newopts --minimal"
+newopts="$newopts"
 
-RESULTS_PATH=${ROOT_PATH}/${RESULTS}/${DATE_NOW}/${TIME_NOW}/${FILE_SYSTEM}/${JOB}/fs-${SIZE}-bs-${BLOCKSIZE}/
 
-mkdir -p ${RESULTS_PATH}
-cd ${RESULTS_PATH}
 
-sys_info
-fs_info
-
-log_job_info
 
 if [ -z $JOB ]; then
 	echo "No job specified"
@@ -215,15 +193,32 @@ export SIZE=${SIZE}
 export DIRECTORY=${DIRECTORY}
 
 if [ $fg -eq 1 ]; then
+	SCENARIO=flamegraph
+	RESULTS_PATH=${ROOT_PATH}/${RESULTS}/${DATE_NOW}/job-${JOB}-kv-${KERNEL}-size-${SIZE}-bs-${BLOCKSIZE}-fs-${FILE_SYSTEM}-${ID}/${SCENARIO}
+	mkdir -p ${RESULTS_PATH}
+	log_job_info
+	cd ${RESULTS_PATH}
 	flamegraph $newopts
+	cd ${ROOT_PATH}
 fi
 
 if [ $hm -eq 1 ]; then
+	SCENARIO=heapmap
+	RESULTS_PATH=${ROOT_PATH}/${RESULTS}/${DATE_NOW}/job-${JOB}-kv-${KERNEL}-size-${SIZE}-bs-${BLOCKSIZE}-fs-${FILE_SYSTEM}-${ID}/${SCENARIO}
+	mkdir -p ${RESULTS_PATH}
+	log_job_info 
+	cd ${RESULTS_PATH}
 	heatmap $newopts
+	cd ${ROOT_PATH}
 fi
 
 if [ $st -eq 1 ]; then
+	SCENARIO=stats
+	RESULTS_PATH=${ROOT_PATH}/${RESULTS}/${DATE_NOW}/job-${JOB}-kv-${KERNEL}-size-${SIZE}-bs-${BLOCKSIZE}-fs-${FILE_SYSTEM}-${ID}/${SCENARIO}
+	mkdir -p ${RESULTS_PATH}
+	log_job_info
+	cd ${RESULTS_PATH}
 	stats $newopts
+	cd ${ROOT_PATH}
 fi
 
-cd ${ROOT_PATH}
