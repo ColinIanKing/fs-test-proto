@@ -43,6 +43,31 @@ def sysinfo_load(file):
 
 	return sysinfo
 
+job_config_cache = {}
+
+def job_config_get(job):
+	config = []
+	keys = [ 'Label', 'Units', 'Scale', 'JsonPath' ]
+	if job in job_config_cache:
+		return job_config_cache[job]
+	else:
+		f = open(os.path.join('jobs', job + '.conf'), 'r')
+		for line in f.read().splitlines():
+			if line[:1] == '#':
+				continue
+			info = {}
+			fields = line.split(',', 4)
+			if ',' in line:
+				for i in range(0, len(fields)):
+					info[keys[i]] = fields[i].lstrip().rstrip()
+
+			config.append(info)
+		f.close()
+		print "JOB: " + job, config
+		print
+		job_config_cache[job] = config
+		return config
+
 def keys_variant(stats):
 	skipkeys = [ 'Time', 'Kernel-version', 'Full Date']
 	keys = []
@@ -81,9 +106,9 @@ def sysinfo_keys_to_label(sysinfo, keys):
 
 	return label
 
-def simple_histogram_on_fs(f, sysinfo, keys, xlabels, yvalues):
-	title = f[0]
-	units = f[1]
+def simple_histogram_on_fs(config, sysinfo, keys, xlabels, yvalues):
+	title = config['Label']
+	units = config['Units']
 	title_keys = ['Job', 'Filesystem', 'Kernel-release']
 	subtitle = ""
 	for k in title_keys:
@@ -155,20 +180,6 @@ def simple_graph_samples(keys, title, data):
 	plt.show()
 	return
 
-#
-#  TODO: Make this per test configurable
-#
-fields = [
-	[ "Disk utilisation","%",	1,    "disk_util.0.util",	simple_histogram_on_fs ],
-	[ "Write Bandwidth", "MB/sec",  1000, "jobs.0.write.bw",	simple_histogram_on_fs ],
-	[ "Write Ops",       "Ops/sec", 1,    "jobs.0.write.iops",	simple_histogram_on_fs ],
-	[ "Runtime",         "seconds",	1000, "jobs.0.write.runtime",	simple_histogram_on_fs ],
-	[ "Mean C Latency",  "ms",      1,    "jobs.0.write.clat.mean",	simple_histogram_on_fs ],
-	[ "Mean Latency",    "ms",      1,    "jobs.0.write.lat.mean",	simple_histogram_on_fs ],
-	[ "User CPU",	     "%",       1,    "jobs.0.usr_cpu",		simple_histogram_on_fs ],
-	[ "System CPU",	     "%",       1,    "jobs.0.sys_cpu",		simple_histogram_on_fs ]
-]
-
 def get_json_val(json_data, fullpath):
 	path = fullpath.split('.')
 	j = json_data
@@ -190,20 +201,34 @@ def compare_stats_sort_key(sysinfo):
 # Do statistic data gathering
 #
 def compare_stats(stats, keys):
-	for f in fields:
+	#
+	# Determine which jobs were run
+	# and hence all the unique configs
+	#
+	unique_configs = []
+	for (cur, sysinfo, fio_stats) in stats:
+		job = sysinfo['Job']
+		config = job_config_get(job)
+		for c in config:
+			if not c in unique_configs:
+				unique_configs.append(c)
+
+	for config in unique_configs:
 		yvalues = []
 		xlabels = []
+
 		for (cur, sysinfo, fio_stats) in stats:
-			d = get_json_val(fio_stats, f[3])
-			yvalues.append(d / f[2])
-			xlabels.append(sysinfo_keys_to_label(sysinfo, keys))
+			if config in job_config_get(sysinfo['Job']):
+				d = get_json_val(fio_stats, config['JsonPath'])
+				yvalues.append(d / float(config['Scale']))
+				xlabels.append(sysinfo_keys_to_label(sysinfo, keys))
 		#
 		# Sort based on the xlabels
 		#
 		indexes = np.argsort(xlabels)[::-1]
 		xlabels = [ xlabels[i] for i in indexes ]
 		yvalues = [ yvalues[i] for i in indexes ]
-		f[4](f, sysinfo, keys, xlabels, yvalues)
+		simple_histogram_on_fs(config, sysinfo, keys, xlabels, yvalues)
 
 #
 #  Load in fio-stats.json and sysinfo.log for the given tests
@@ -213,11 +238,12 @@ def collect_stats(path):
 	for cur, _dirs, files in os.walk(path):
 		head, tail = os.path.split(cur)
 		if tail == "stats":
-			sysinfo = sysinfo_load(os.path.join(cur, 'sysinfo.log'))
+			sysinfo   = sysinfo_load(os.path.join(cur, 'sysinfo.log'))
 			f = open(os.path.join(cur, 'fio-stats.json'), 'r')
 			fio_stats = json.load(f)
 			f.close()
 			stats.append((cur, sysinfo, fio_stats))
+			job_config_get(sysinfo['Job'])
 	return stats
 
 def find_matching_stats(stats, criteria):
@@ -279,13 +305,13 @@ for i in range(1, len(sys.argv)):
 #tests = find_matching_stats(stats, [ ('Job', ['write-sync-seq-1', 'write-sync-seq-2']), ('Filesystem', ['xfs','btrfs']), ('Kernel-release', ['3.13.0'])])
 #tests = find_matching_stats(stats, [ ('Job', []), ('Filesystem', ['xfs','btrfs']), ('Kernel-release', ['3.13.0'])])
 #tests = find_matching_stats(stats, [ ('Job', ['write-sync-seq-1', 'write-sync-seq-2']), ('Filesystem', ['xfs','btrfs']), ('Kernel-release', ['3.14.0', '3.13.0'])])
-tests = find_matching_stats(stats, [ ('Job', ['write-sync-seq-4']), ('Filesystem', []), ('Kernel-release', [])])
+tests = find_matching_stats(stats, [ ('Job', ['write-sync-seq-4']), ('Filesystem', ['xfs']), ('Kernel-release', [])])
 keys = keys_variant(tests)
 compare_stats(tests, keys)
-compare_samples(tests, keys, 'Bandwidth', 'job.*_bw\.log')
-compare_samples(tests, keys, 'I/O ops per sec', 'job.*_iops\.log')
-compare_samples(tests, keys, 'I/O Latency', 'job.*_lat\.log')
-compare_samples(tests, keys, 'Completion Latency', 'job.*_clat\.log')
+#compare_samples(tests, keys, 'Bandwidth', 'job.*_bw\.log')
+#compare_samples(tests, keys, 'I/O ops per sec', 'job.*_iops\.log')
+#compare_samples(tests, keys, 'I/O Latency', 'job.*_lat\.log')
+#compare_samples(tests, keys, 'Completion Latency', 'job.*_clat\.log')
 
 
 
