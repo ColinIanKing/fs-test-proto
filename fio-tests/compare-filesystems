@@ -32,10 +32,11 @@ if len(sys.argv) < 2:
 if not os.path.exists(sys.argv[1]):
 	sys.exit('Path %s not found' % sys.argv[1])
 
+#
+#  Load sysinfo
+#
 def sysinfo_load(file):
 	sysinfo = {}
-
-	print "sysinfo_load: " + file
 
 	if os.path.isfile(file):
 		f = open(file, 'r')
@@ -52,6 +53,9 @@ def sysinfo_load(file):
 
 job_config_cache = {}
 
+#
+#  Get and cache job configuration data
+#
 def job_config_get(job):
 	config = []
 	keys = [ 'Label', 'Units', 'Scale', 'JsonPath' ]
@@ -70,11 +74,12 @@ def job_config_get(job):
 
 			config.append(info)
 		f.close()
-		print "JOB: " + job, config
-		print
 		job_config_cache[job] = config
 		return config
 
+#
+#  Variants of keys?
+#
 def keys_variant(stats):
 	skipkeys = [ 'Time', 'Kernel-version', 'Full Date']
 	keys = []
@@ -86,7 +91,11 @@ def keys_variant(stats):
 
 	return keys
 
+#
+#  Take an array of words and return words as a comma separated string
+#
 def array_to_str(array):
+	#  Must be a better way to do this
 	str = ""
 	for a in array:
 		if str != "":
@@ -95,13 +104,6 @@ def array_to_str(array):
 	return str
 
 def sysinfo_keys_to_title(sysinfo, keys):
-	title = ""
-	for key in keys:
-		if title != "":
-			title = title + ", "
-		title = title + key
-
-	#return title
 	return array_to_str(keys)
 
 def sysinfo_keys_to_label(sysinfo, keys):
@@ -110,19 +112,14 @@ def sysinfo_keys_to_label(sysinfo, keys):
 		if label != "":
 			label = label + ", "
 		label = label + sysinfo[key]
-
 	return label
 
-def simple_histogram_on_fs(config, sysinfo, keys, xlabels, yvalues):
+#
+#  Very simple horizontal bar chart
+#
+def bar_horiz(keys, config, subtitle, xlabels, yvalues):
 	title = config['Label']
 	units = config['Units']
-	title_keys = ['Job', 'Filesystem', 'Kernel-release']
-	subtitle = ""
-	for k in title_keys:
-		if not k in keys:
-			subtitle += sysinfo[k] + ", "
-
-	#subtitle += sysinfo_keys_to_title(sysinfo, keys)
 
 	fig = plt.figure(figsize=(8, 3.5 + len(xlabels) * 0.3))
 	ind = np.arange(len(yvalues))
@@ -135,7 +132,37 @@ def simple_histogram_on_fs(config, sysinfo, keys, xlabels, yvalues):
 	plt.tight_layout()
 	plt.show()
 
-def simple_graph_samples(keys, title, data):
+#
+#  Very simple graph plot
+# 
+def plot_horiz(keys, config, subtitle, xlabels, yvalues):
+	title = config['Label']
+	units = config['Units']
+	title_keys = ['Job', 'Filesystem', 'Kernel-release']
+
+	indexes = np.argsort(xlabels)
+	xlabels = [ xlabels[i] for i in indexes ]
+	yvalues = [ yvalues[i] for i in indexes ]
+
+	fig, plot = plt.subplots()
+	#figsize=(8, 3.5 + len(xlabels) * 0.3))
+	ind = np.arange(len(xlabels))
+	plt.title(title + ": " + subtitle)
+
+	print ind
+	print yvalues
+
+	plot.plot(ind, yvalues)
+	plot.grid(True)
+	plot.set_xticklabels(xlabels, rotation=90)
+	plot.set_xlabel(subtitle)
+	plot.set_ylabel(title + " (" + units + ")")
+	plot.set_ylim(0, max(yvalues) * 1.1)
+	plot.set_xlim(0, len(xlabels) -1)
+	plt.tight_layout()
+	plt.show()
+
+def plot_samples(keys, title, data):
 	nplots = len(data)
 	title_keys = ['Job', 'Filesystem', 'Kernel-release']
 
@@ -187,6 +214,9 @@ def simple_graph_samples(keys, title, data):
 	plt.show()
 	return
 
+#
+#  Traverse a path to find json values
+#
 def get_json_val(json_data, fullpath):
 	path = fullpath.split('.')
 	j = json_data
@@ -201,13 +231,10 @@ def get_json_val(json_data, fullpath):
 		return 0
 
 
-def compare_stats_sort_key(sysinfo):
-	return sysinfo_keys_to_label(sysinfo, keys)
-
 #
 # Do statistic data gathering
 #
-def compare_stats(stats, keys):
+def compare_stats(graph_func, stats, keys):
 	#
 	# Determine which jobs were run
 	# and hence all the unique configs
@@ -229,13 +256,23 @@ def compare_stats(stats, keys):
 				d = get_json_val(fio_stats, config['JsonPath'])
 				yvalues.append(d / float(config['Scale']))
 				xlabels.append(sysinfo_keys_to_label(sysinfo, keys))
+
+		#
+		# Determine graph title, this is dodgy as we are using the
+		# wrong sysinfo!!! FIXME
+		#
+		title_keys = ['Job', 'Filesystem', 'Kernel-release']
+		subtitle = ""
+		for k in title_keys:
+			if not k in keys:
+				subtitle += sysinfo[k] + ", "
 		#
 		# Sort based on the xlabels
 		#
 		indexes = np.argsort(xlabels)[::-1]
 		xlabels = [ xlabels[i] for i in indexes ]
 		yvalues = [ yvalues[i] for i in indexes ]
-		simple_histogram_on_fs(config, sysinfo, keys, xlabels, yvalues)
+		graph_func(keys, config, subtitle, xlabels, yvalues)
 
 #
 #  Load in fio-stats.json and sysinfo.log for the given tests
@@ -295,7 +332,6 @@ def compare_samples(stats, keys, title, pattern):
 					values.append((x,y))
 		data.append((values, sysinfo))
 		titles.append(sysinfo_keys_to_label(sysinfo, keys))
-
 	#
 	# Sort based on the chart titles
 	#
@@ -304,11 +340,43 @@ def compare_samples(stats, keys, title, pattern):
 	data = [ data[i] for i in indexes ]
 
 	if len(data):
-		simple_graph_samples(keys, title, data)
+		plot_samples(keys, title, data)
 	else:
 		print "No relevant data can be found"
 
+def compare_stats_ordered(graph_func, stats, keys, order):
+	if (len(order) <= 1):
+		sortstats = sorted(stats, key=lambda d: d[1][order[0]])
 
+		print sortstats
+
+		compare_stats(graph_func, sortstats, keys)
+		return
+
+	#
+	#  For all key values, partition into groups
+	#  where the key value is identical and sub-divide
+	#  or graph on next key value
+	#
+	k = order[0]
+	values = []
+	for (cur, sysinfo, fio_stats) in stats:
+		if not sysinfo[k] in values:
+			values.append(sysinfo[k])
+
+	suborder = order[1:len(order)]
+	for v in values:
+		substats = []
+		for s in stats:
+			(cur, sysinfo, fio_stats) = s
+			if sysinfo[k] == v:
+				substats.append(s)
+
+		compare_stats_ordered(graph_func, substats, keys, suborder)
+
+#
+#  Gather up stats
+#
 stats = []
 for i in range(1, len(sys.argv)):
 	stats += collect_stats(sys.argv[i])
@@ -316,10 +384,13 @@ for i in range(1, len(sys.argv)):
 #tests = find_matching_stats(stats, [ ('Job', ['write-sync-seq-1', 'write-sync-seq-2']), ('Filesystem', ['xfs','btrfs']), ('Kernel-release', ['3.13.0'])])
 #tests = find_matching_stats(stats, [ ('Job', []), ('Filesystem', ['xfs','btrfs']), ('Kernel-release', ['3.13.0'])])
 #tests = find_matching_stats(stats, [ ('Job', ['write-sync-seq-1', 'write-sync-seq-2']), ('Filesystem', ['xfs','btrfs']), ('Kernel-release', ['3.14.0', '3.13.0'])])
-tests = find_matching_stats(stats, [ ('Job', ['write-sync-seq-4']), ('Filesystem', ['xfs']), ('Kernel-release', [])])
+#tests = find_matching_stats(stats, [ ('Job', ['write-sync-seq-4']), ('Filesystem', ['xfs']), ('Kernel-release', [])])
+tests = find_matching_stats(stats, [ ('Date', []), ('Job', ['write-sync-seq-4']), ('Filesystem', ['xfs']), ('Kernel-release', [])])
 keys = keys_variant(tests)
-compare_stats(tests, keys)
-compare_samples(tests, keys, 'Bandwidth', 'job.*_bw\.log*')
+#compare_stats(bar_horiz, tests, keys)
+#compare_stats_ordered(bar_horiz, tests, keys, ['Job', 'Filesystem', 'Date'])
+compare_stats_ordered(plot_horiz, tests, keys, ['Job', 'Filesystem', 'Date'])
+#compare_samples(tests, keys, 'Bandwidth', 'job.*_bw\.log*')
 #compare_samples(tests, keys, 'I/O ops per sec', 'job.*_iops\.log*')
 #compare_samples(tests, keys, 'I/O Latency', 'job.*_lat\.log*')
 #compare_samples(tests, keys, 'Completion Latency', 'job.*_clat\.log*')
