@@ -24,6 +24,7 @@ import json
 import numpy as np
 import matplotlib.pyplot as plt
 import re
+import gzip
 
 if len(sys.argv) < 2:
 	sys.exit('Usage: %s results-path' % sys.argv[0])
@@ -34,7 +35,13 @@ if not os.path.exists(sys.argv[1]):
 def sysinfo_load(file):
 	sysinfo = {}
 
-	f = open(file, 'r')
+	print "sysinfo_load: " + file
+
+	if os.path.isfile(file):
+		f = open(file, 'r')
+	else:
+		f = gzip.open(file + '.gz')
+
 	for line in f.read().splitlines():
 		if ':' in line:
 			[key, val] = line.split(':',1)
@@ -275,7 +282,11 @@ def compare_samples(stats, keys, title, pattern):
 			y = []
 			for m in [regex.search(l)]:
 				if m:
-					f = open(os.path.join(cur, l), 'r')
+					filename = os.path.join(cur, l)
+					if filename[-3:] == '.gz':
+						f = gzip.open(filename)
+					else:
+						f = open(filename, 'r')
 					for line in f.read().splitlines():
 						s = line.split(',')
 						x.append(int(s[0]))
@@ -308,10 +319,10 @@ for i in range(1, len(sys.argv)):
 tests = find_matching_stats(stats, [ ('Job', ['write-sync-seq-4']), ('Filesystem', ['xfs']), ('Kernel-release', [])])
 keys = keys_variant(tests)
 compare_stats(tests, keys)
-#compare_samples(tests, keys, 'Bandwidth', 'job.*_bw\.log')
-#compare_samples(tests, keys, 'I/O ops per sec', 'job.*_iops\.log')
-#compare_samples(tests, keys, 'I/O Latency', 'job.*_lat\.log')
-#compare_samples(tests, keys, 'Completion Latency', 'job.*_clat\.log')
+compare_samples(tests, keys, 'Bandwidth', 'job.*_bw\.log*')
+#compare_samples(tests, keys, 'I/O ops per sec', 'job.*_iops\.log*')
+#compare_samples(tests, keys, 'I/O Latency', 'job.*_lat\.log*')
+#compare_samples(tests, keys, 'Completion Latency', 'job.*_clat\.log*')
 
 
 

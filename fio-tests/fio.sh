@@ -6,7 +6,7 @@ SVG_WIDTH=2048
 MEM_TOTAL_KB=$(grep MemTotal /proc/meminfo | awk {'print $2}')
 MEM_TOTAL_DOUBLE_KB=$((MEM_TOTAL_KB * 2))
 #DATE_NOW=$(date +%F)
-DATE_NOW=2014-06-16
+DATE_NOW=2014-06-21
 TIME_NOW=$(date +%H%M)
 KERNEL=$(uname -r)
 ID=$(cat /dev/urandom | tr -dc 'a-f0-9' | fold -w 12 | head -n 1)
@@ -89,6 +89,8 @@ log_job_info()
 
 	sys_info
 	fs_info
+
+	gzip --best ${JOB_INFO}
 }
 
 stats()
@@ -219,6 +221,7 @@ if [ $st -eq 1 ]; then
 	log_job_info
 	cd ${RESULTS_PATH}
 	stats $newopts
+	gzip --best ${RESULTS_PATH}/*.log
 	cd ${ROOT_PATH}
 fi
 
