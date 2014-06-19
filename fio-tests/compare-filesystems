@@ -149,9 +149,6 @@ def plot_horiz(keys, config, subtitle, xlabels, yvalues):
 	ind = np.arange(len(xlabels))
 	plt.title(title + ": " + subtitle)
 
-	print ind
-	print yvalues
-
 	plot.plot(ind, yvalues)
 	plot.grid(True)
 	plot.set_xticklabels(xlabels, rotation=90)
@@ -347,9 +344,6 @@ def compare_samples(stats, keys, title, pattern):
 def compare_stats_ordered(graph_func, stats, keys, order):
 	if (len(order) <= 1):
 		sortstats = sorted(stats, key=lambda d: d[1][order[0]])
-
-		print sortstats
-
 		compare_stats(graph_func, sortstats, keys)
 		return
 
