@@ -135,27 +135,52 @@ def bar_horiz(keys, config, subtitle, xlabels, yvalues):
 #
 #  Very simple graph plot
 # 
-def plot_horiz(keys, config, subtitle, xlabels, yvalues):
+def plot_horiz(keys, config, collection):
 	title = config['Label']
 	units = config['Units']
 	title_keys = ['Job', 'Filesystem', 'Kernel-release']
 
-	indexes = np.argsort(xlabels)
-	xlabels = [ xlabels[i] for i in indexes ]
-	yvalues = [ yvalues[i] for i in indexes ]
+	fig, plot = plt.subplots(figsize=(8, 8))
+	plt.title(title)
 
-	fig, plot = plt.subplots()
-	#figsize=(8, 3.5 + len(xlabels) * 0.3))
-	ind = np.arange(len(xlabels))
-	plt.title(title + ": " + subtitle)
+	#
+	#  Determine all the xlabels in the collection
+	#
+	all_xlabels = []
+	ymax = 0
+	ymin = 1e12
+	for c in collection:
+		(subtitle, xlabels, yvalues, xlabel) = c
+		for xlabel in xlabels:
+			if not xlabel in all_xlabels:
+				all_xlabels.append(xlabel)
+		ymax = max(ymax, max(yvalues))
+		ymin = min(ymin, min(yvalues))
 
-	plot.plot(ind, yvalues)
-	plot.grid(True)
-	plot.set_xticklabels(xlabels, rotation=90)
-	plot.set_xlabel(subtitle)
-	plot.set_ylabel(title + " (" + units + ")")
-	plot.set_ylim(0, max(yvalues) * 1.1)
-	plot.set_xlim(0, len(xlabels) -1)
+	(subtitle, xlabels, yvalues, xlabel) = collection[0]
+
+	for c in collection:
+		(subtitle, xlabels, yvalues, xlabel) = c
+
+		xvalues = []
+		for x in xlabels:
+			xvalues.append(all_xlabels.index(x))
+
+		#
+		#  And sort vales in x order (sigh)
+		#
+		indexes = np.argsort(xvalues)
+		xvalues = [ xvalues[i] for i in indexes ]
+		yvalues = [ yvalues[i] for i in indexes ]
+
+		plot.plot(xvalues, yvalues, label = xlabel)
+		plot.grid(True)
+		plot.set_xticklabels(all_xlabels, rotation=90)
+		plot.set_xlabel(subtitle)
+		plot.set_ylabel(title + " (" + units + ")")
+		plot.set_ylim(ymin * 0.95, ymax * 1.05)
+		plot.set_xlim(0, len(all_xlabels) -1)
+	plt.legend(loc = 1)
 	plt.tight_layout()
 	plt.show()
 
@@ -231,45 +256,121 @@ def get_json_val(json_data, fullpath):
 #
 # Do statistic data gathering
 #
-def compare_stats(graph_func, stats, keys):
+def compare_stats(graph_func, stats_collection, keys, stacked_keys):
 	#
 	# Determine which jobs were run
 	# and hence all the unique configs
 	#
 	unique_configs = []
-	for (cur, sysinfo, fio_stats) in stats:
-		job = sysinfo['Job']
-		config = job_config_get(job)
-		for c in config:
-			if not c in unique_configs:
-				unique_configs.append(c)
 
-	for config in unique_configs:
-		yvalues = []
-		xlabels = []
-
+	for stats in stats_collection:
 		for (cur, sysinfo, fio_stats) in stats:
-			if config in job_config_get(sysinfo['Job']):
-				d = get_json_val(fio_stats, config['JsonPath'])
-				yvalues.append(d / float(config['Scale']))
-				xlabels.append(sysinfo_keys_to_label(sysinfo, keys))
+			job = sysinfo['Job']
+			config = job_config_get(job)
+			for c in config:
+				if not c in unique_configs:
+					unique_configs.append(c)
+
+	#
+	#  The following are config values that we may be
+	#  interested in in labelling
+	#
+	sysinfokeys = [ 'Blocksize', 'Filesystem', 'Device', 'Hardware',
+		       	'Job', 'Date', 'Kernel-release', 'Filesize', 'Processor' ]
+
+	#
+	#  Step #1, find all the different sysinfo fields that change
+	#  across all the collections and tests
+	#	
+	sysinfovals = {}
+	collection_fields_vary = []
+	for config in unique_configs:
+		for stats in stats_collection:
+			for (cur, sysinfo, fio_stats) in stats:
+				if config in job_config_get(sysinfo['Job']):
+					for c in sysinfokeys:
+						try:
+							if not sysinfo[c] in sysinfovals[c]:
+								sysinfovals[c].append(sysinfo[c])
+						except:
+							sysinfovals[c] = [ sysinfo[c] ]
+
+	for s in sysinfovals:
+		if len(sysinfovals[s]) > 1:
+			collection_fields_vary.append(s)
+
+	#
+	#  Step #2, gather the data
+	#
+	for config in unique_configs:
+		sysinfovals = {}
+		collection = []
 
 		#
-		# Determine graph title, this is dodgy as we are using the
-		# wrong sysinfo!!! FIXME
+		#  find all the different sysinfo fields that change and don't
+		#  change across the tests
 		#
-		title_keys = ['Job', 'Filesystem', 'Kernel-release']
-		subtitle = ""
-		for k in title_keys:
-			if not k in keys:
-				subtitle += sysinfo[k] + ", "
-		#
-		# Sort based on the xlabels
-		#
-		indexes = np.argsort(xlabels)[::-1]
-		xlabels = [ xlabels[i] for i in indexes ]
-		yvalues = [ yvalues[i] for i in indexes ]
-		graph_func(keys, config, subtitle, xlabels, yvalues)
+		for stats in stats_collection:
+			for (cur, sysinfo, fio_stats) in stats:
+				if config in job_config_get(sysinfo['Job']):
+					for c in sysinfokeys:
+						try:
+							if not sysinfo[c] in sysinfovals[c]:
+								sysinfovals[c].append(sysinfo[c])
+						except:
+							sysinfovals[c] = [sysinfo[c]]
+
+		sysinfo_fields_vary = []
+		sysinfo_fields_static = []
+
+		for s in sysinfovals:
+			if len(sysinfovals[s]) > 1:
+				if not s in stacked_keys:
+					sysinfo_fields_vary.append(s)
+			else:
+				sysinfo_fields_static.append(s)
+
+		label = config['Label']
+		units = config['Units']
+		scale = float(config['Scale'])
+		jsonpath = config['JsonPath']
+
+		subtitle = []
+		for f in sysinfo_fields_static:
+			subtitle.append(sysinfo[f])
+
+		for stats in stats_collection:
+			yvalues = []
+			xlabels = []
+			for (cur, sysinfo, fio_stats) in stats:
+				if config in job_config_get(sysinfo['Job']):
+					val = get_json_val(fio_stats, jsonpath)
+					yvalues.append(val / scale)
+					xlabel = ""
+					for f in sysinfo_fields_vary:
+						xlabel += sysinfo[f] + ", "
+
+					xlabels.append(xlabel)
+					#print xlabel, val
+
+					for c in sysinfokeys:
+						try:
+							if not sysinfo[c] in sysinfovals[c]:
+								sysinfovals[c].append(sysinfo[c])
+						except:
+							sysinfovals[c] = [sysinfo[c]]
+			
+
+				xlabel = []
+				for f in stacked_keys:
+					xlabel.append(sysinfo[f])
+			
+			#
+			# Add them to the subplot collection
+			#
+			collection.append((array_to_str(subtitle), xlabels, yvalues, array_to_str(xlabel)))
+
+		graph_func(keys, config, collection)
 
 #
 #  Load in fio-stats.json and sysinfo.log for the given tests
@@ -341,10 +442,10 @@ def compare_samples(stats, keys, title, pattern):
 	else:
 		print "No relevant data can be found"
 
-def compare_stats_ordered(graph_func, stats, keys, order):
+def compare_stats_ordered_traverse(graph_func, stats, keys, order, stacked_keys, traversed_stats):
 	if (len(order) <= 1):
 		sortstats = sorted(stats, key=lambda d: d[1][order[0]])
-		compare_stats(graph_func, sortstats, keys)
+		traversed_stats.append(sortstats)
 		return
 
 	#
@@ -353,20 +454,30 @@ def compare_stats_ordered(graph_func, stats, keys, order):
 	#  or graph on next key value
 	#
 	k = order[0]
-	values = []
-	for (cur, sysinfo, fio_stats) in stats:
-		if not sysinfo[k] in values:
-			values.append(sysinfo[k])
-
 	suborder = order[1:len(order)]
-	for v in values:
-		substats = []
-		for s in stats:
-			(cur, sysinfo, fio_stats) = s
-			if sysinfo[k] == v:
-				substats.append(s)
 
-		compare_stats_ordered(graph_func, substats, keys, suborder)
+	if not k in stacked_keys:
+		compare_stats_ordered_traverse(graph_func, stats, keys, suborder, stacked_keys, traversed_stats)
+	else:
+		values = []
+		for (cur, sysinfo, fio_stats) in stats:
+			if not sysinfo[k] in values:
+				values.append(sysinfo[k])
+		for v in values:
+			substats = []
+			for s in stats:
+				(cur, sysinfo, fio_stats) = s
+				if sysinfo[k] == v:
+					substats.append(s)
+
+			compare_stats_ordered_traverse(graph_func, substats, keys, suborder, stacked_keys, traversed_stats)
+
+
+def compare_stats_ordered(graph_func, stats, keys, order, stacked_keys):
+	traversed_stats = []
+	compare_stats_ordered_traverse(graph_func, stats, keys, order, stacked_keys, traversed_stats)
+	compare_stats(graph_func, traversed_stats, keys, stacked_keys)
+
 
 #
 #  Gather up stats
@@ -375,15 +486,10 @@ stats = []
 for i in range(1, len(sys.argv)):
 	stats += collect_stats(sys.argv[i])
 
-#tests = find_matching_stats(stats, [ ('Job', ['write-sync-seq-1', 'write-sync-seq-2']), ('Filesystem', ['xfs','btrfs']), ('Kernel-release', ['3.13.0'])])
-#tests = find_matching_stats(stats, [ ('Job', []), ('Filesystem', ['xfs','btrfs']), ('Kernel-release', ['3.13.0'])])
-#tests = find_matching_stats(stats, [ ('Job', ['write-sync-seq-1', 'write-sync-seq-2']), ('Filesystem', ['xfs','btrfs']), ('Kernel-release', ['3.14.0', '3.13.0'])])
-#tests = find_matching_stats(stats, [ ('Job', ['write-sync-seq-4']), ('Filesystem', ['xfs']), ('Kernel-release', [])])
-tests = find_matching_stats(stats, [ ('Date', []), ('Job', ['write-sync-seq-4']), ('Filesystem', ['xfs']), ('Kernel-release', [])])
+tests = find_matching_stats(stats, [ ('Date', []), ('Job', ['write-sync-seq-4', 'write-sync-rand-4']), ('Filesystem', []), ('Kernel-release', ['3.15.0-6-generic'])])
 keys = keys_variant(tests)
 #compare_stats(bar_horiz, tests, keys)
-#compare_stats_ordered(bar_horiz, tests, keys, ['Job', 'Filesystem', 'Date'])
-compare_stats_ordered(plot_horiz, tests, keys, ['Job', 'Filesystem', 'Date'])
+compare_stats_ordered(plot_horiz, tests, keys, ['Job', 'Filesystem', 'Date'], ['Filesystem', 'Job'])
 #compare_samples(tests, keys, 'Bandwidth', 'job.*_bw\.log*')
 #compare_samples(tests, keys, 'I/O ops per sec', 'job.*_iops\.log*')
 #compare_samples(tests, keys, 'I/O Latency', 'job.*_lat\.log*')
