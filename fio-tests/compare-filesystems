@@ -27,12 +27,23 @@ import re
 import gzip
 import tempfile
 import string
+import errno
 
 if len(sys.argv) < 2:
 	sys.exit('Usage: %s results-path' % sys.argv[0])
 
 if not os.path.exists(sys.argv[1]):
 	sys.exit('Path %s not found' % sys.argv[1])
+
+import os, errno
+
+def mkdirp(path):
+	try:
+		os.makedirs(path)
+	except OSError as exc:
+		if exc.errno == errno.EEXIST and os.path.isdir(path):
+			pass
+		else: raise
 
 #
 #  Load sysinfo
@@ -134,8 +145,6 @@ def save_png(path, title, fig):
 			str += '-'
 
 	filename = os.path.join(path, str + ".png")
-	print "SAVE to " + filename
-
 	fig.savefig(filename, dpi=70)
 	return filename
 
@@ -145,8 +154,6 @@ def save_png(path, title, fig):
 def bar_horiz(path, keys, config, collection):
 	title = config['Label']
 	units = config['Units']
-
-	print title
 
 	nplots = len(collection)
 	fig, plots = plt.subplots(nplots, figsize=(8, 3* nplots + 1))
@@ -190,10 +197,6 @@ def bar_horiz(path, keys, config, collection):
 		yvalues = [ yvalues[i] for i in indexes ]
 		pos = range(1, len(xlabels)+1, 1)
 
-		print len(pos), len(yvalues), len(xlabel)
-		print pos
-		print yvalues
-
 		plots[j].xaxis.grid(True, which='both')
 		plots[j].barh(pos, yvalues, align='center')
 		plots[j].set_title(xlabel + ", " + title + " (" + units + ")" + "\n" + subtitle)
@@ -214,7 +217,6 @@ def plot_horiz(path, keys, config, collection):
 	units = config['Units']
 
 	fig, plot = plt.subplots(figsize=(8, 8))
-
 
 	#
 	#  Determine all the xlabels in the collection
@@ -242,7 +244,7 @@ def plot_horiz(path, keys, config, collection):
 		#
 		#  And sort vales in x order (sigh)
 		#
-		#indexes = np.argsort(xvalues)
+		#index//es = np.argsort(xvalues)
 		#xvalues = [ xvalues[i] for i in indexes ]
 		#yvalues = [ yvalues[i] for i in indexes ]
 
@@ -258,6 +260,71 @@ def plot_horiz(path, keys, config, collection):
 	plt.tight_layout()
 	#plt.show()
 	save_png(path, title, fig)
+
+def plot_samples_by_filesystem_cols(path, keys, title, data):
+	title_keys = ['Job', 'Filesystem', 'Kernel-release']
+	cols = []
+	for (values, sysinfo) in data:
+		if not sysinfo['Filesystem'] in cols:
+			cols.append(sysinfo['Filesystem'])
+
+	nplots = len(data)
+	ncols = len(cols)
+	nrows = nplots / ncols
+
+	fig, plots = plt.subplots(nrows=nrows, ncols=ncols, figsize=(6 * ncols,  3 * nrows))
+
+	max_y = 0
+	#
+	#  Calculate some simple stats
+	#
+	for (values, sysinfo) in data:
+		total_y = 0
+		total_n = 0
+		for (x, y) in values:
+			max_y = max(max_y, max(y))
+			total_y += sum(y)
+			total_n += len(y)
+		if total_n == 0:
+			sysinfo['mean_y'] = 0
+		else:
+			sysinfo['mean_y'] = float(total_y) / total_n
+
+	subtitle = ""
+	for k in title_keys:
+		if not k in keys:
+			subtitle += sysinfo[k] + ", "
+
+	n = 0
+	for (values, sysinfo) in data:
+		fs = sysinfo['Filesystem']
+		i = n % nrows
+		j = n / nrows
+		
+		for (x, y) in values:
+			max_x = max(x)
+			max_y = max(y)
+			plots[i,j].plot(x, y, '.', color='black')
+			plots[i,j].set_xlabel('Sample #')
+			plots[i,j].set_ylabel(title)
+			plots[i,j].set_title(title + ', ' + subtitle + sysinfo_keys_to_label(sysinfo, keys))
+			plots[i,j].set_xlim(0, max_x)
+			plots[i,j].set_ylim(0, max_y)
+			plots[i,j].yaxis.grid(True, which='both')
+
+		yy = sysinfo['mean_y']
+		fs = sysinfo['Filesystem']
+		x = [0, max_x ]
+		y = [yy, yy]
+		plots[i,j].plot(x, y, label='Mean ' + '%.4f' % yy, color='red')
+		plots[i,j].legend(loc = 2)
+		n = n + 1
+
+	plt.tight_layout()
+	#plt.show()
+	save_png(path, title, fig)
+	return
+
 
 def plot_samples(path, keys, title, data):
 	nplots = len(data)
@@ -427,7 +494,6 @@ def compare_stats(path, graph_func, stats_collection, keys, stacked_keys):
 						xlabel += sysinfo[f] + ", "
 
 					xlabels.append(clean_label(xlabel))
-					#print xlabel, val
 
 					for c in sysinfokeys:
 						try:
@@ -477,7 +543,6 @@ def find_matching_stats(stats, criteria):
 						break
 				keep = keep and found
 		if keep:
-			#print "Use data " + cur
 			matches.append((cur, sysinfo, fio_stats))
 
 	return matches
@@ -514,7 +579,7 @@ def compare_samples(path, stats, keys, title, pattern):
 	data = [ data[i] for i in indexes ]
 
 	if len(data):
-		plot_samples(path, keys, title, data)
+		plot_samples_by_filesystem_cols(path, keys, title, data)
 	else:
 		print "No relevant data can be found"
 
@@ -576,8 +641,9 @@ def generate_html(path, html_file, title):
 </body>
 </html>''' 
 
-	
-	f = open(os.path.join(path, html_file), 'w')
+	mkdirp(path)
+		
+	f = open(os.path.join(path, html_file + ".html"), 'w')
 	f.write(page)
 	f.close()
 
@@ -590,8 +656,10 @@ def generate_html(path, html_file, title):
 def daily_tests_histogram(path, date):
 	tests = find_matching_stats(stats, [ ('Date', [date]), ('Job', []), ('Filesystem', []), ('Kernel-release', [])])
 	keys = keys_variant(tests)
-	compare_stats_ordered(path, bar_horiz, tests, keys, ['Job', 'Filesystem', 'Date'], ['Job'])
-	generate_html(path, 'daily-tests-histogram', 'Test run on ' + date)
+	newpath = os.path.join(path, 'daily-fio-histograms')
+	mkdirp(newpath)
+	compare_stats_ordered(newpath, bar_horiz, tests, keys, ['Job', 'Filesystem', 'Date'], ['Job'])
+	generate_html(newpath, 'daily-tests-histogram', 'Test run on ' + date)
 
 #
 #  Samples of fs on a given day
@@ -599,12 +667,31 @@ def daily_tests_histogram(path, date):
 def daily_tests_samples(path, date):
 	tests = find_matching_stats(stats, [ ('Date', [date]), ('Job', []), ('Filesystem', []), ('Kernel-release', [])])
 	keys = keys_variant(tests)
-	compare_samples(path, tests, keys, 'Bandwidth', 'job.*_bw\.log*')
-	compare_samples(path, tests, keys, 'I/O ops per sec', 'job.*_iops\.log*')
-	#compare_samples(path, tests, keys, 'I/O Latency', 'job.*_lat\.log*')
-	#compare_samples(path, tests, keys, 'Completion Latency', 'job.*_clat\.log*')
-	generate_html(path, 'daily-tests-fio-stats', 'Test run on ' + date)
 
+	graphs = [
+		('Bandwidth',	'job.*_bw\.log*', 'daily-fio-stats-bandwidth'),
+		('I/O ops per sec', 'job.*_iops\.log*', 'daily-fio-stats-io-ops'),
+		('I/O Latency', 'job.*_lat\.log*', 'daily-fio-stats-io-latency'),
+		('I/O Completion Latency ', 'job.*_clat\.log*', 'daily-fio-stats-clatency') ]
+
+	for g in graphs:
+		newpath = os.path.join(path, g[2])
+		mkdirp(newpath)
+		compare_samples(newpath, tests, keys, g[0], g[1])
+		generate_html(newpath, g[2], 'Test run on ' + date)
+
+
+#
+#  Plot trends over time 
+#
+def overtime_trends(path):
+	newpath = os.path.join(path, 'overtime-trends')
+	mkdirp(newpath)
+
+	tests = find_matching_stats(stats, [ ('Date', []), ('Job', ['write-sync-rand-4']), ('Filesystem', []), ('Kernel-release', [])])
+	keys = keys_variant(tests)
+	compare_stats_ordered(newpath, plot_horiz, tests, keys, ['Job', 'Filesystem', 'Date'], ['Filesystem', 'Job'])
+	generate_html(newpath, 'overtime-trends', 'Trends over time')
 
 #
 #  Gather up stats
@@ -617,16 +704,9 @@ for i in range(1, len(sys.argv)):
 tmpdir = tempfile.mkdtemp()
 tmpdir = "/tmp/test"
 print "results in " + tmpdir
-daily_tests_samples(tmpdir, '2014-06-21')
-
-#daily_tests_histogram(tmpdir, '2014-06-16')
-
-#
-#  Plot stats over time 
-#
-#tests = find_matching_stats(stats, [ ('Date', []), ('Job', ['write-sync-seq-4', 'write-sync-rand-4']), ('Filesystem', []), ('Kernel-release', ['3.15.0-6-generic'])])
-#keys = keys_variant(tests)
-#compare_stats_ordered(path, plot_horiz, tests, keys, ['Job', 'Filesystem', 'Date'], ['Kernel-release', 'Filesystem', 'Job'])
+overtime_trends(tmpdir)
+daily_tests_histogram(tmpdir, '2014-06-23')
+daily_tests_samples(tmpdir, '2014-06-23')
 
 
 
