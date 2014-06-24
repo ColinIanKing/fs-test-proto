@@ -156,7 +156,8 @@ def bar_horiz(path, keys, config, collection):
 	units = config['Units']
 
 	nplots = len(collection)
-	fig, plots = plt.subplots(nplots, figsize=(8, 3* nplots + 1))
+	fig, plots = plt.subplots(nplots, figsize=(8, 1.5 * nplots + 1))
+	colors ='rgbwmc'
 
 	#
 	#  Sort collection on xlabel
@@ -192,14 +193,14 @@ def bar_horiz(path, keys, config, collection):
 		#
 		#  And sort values in x order (sigh)
 		#
-		indexes = np.argsort(xvalues)
+		indexes = np.argsort(xlabels)[::-1]
 		xlabels = [ xlabels[i] for i in indexes ]
 		yvalues = [ yvalues[i] for i in indexes ]
 		pos = range(1, len(xlabels)+1, 1)
 
 		plots[j].xaxis.grid(True, which='both')
-		plots[j].barh(pos, yvalues, align='center')
-		plots[j].set_title(xlabel + ", " + title + " (" + units + ")" + "\n" + subtitle)
+		plots[j].barh(pos, yvalues, align='center', color=colors)
+		plots[j].set_title(xlabel + "," + title + " (" + units + ")" + "\n" + subtitle)
 
 		fig.sca(plots[j])
 		plt.yticks(pos, xlabels)
@@ -207,6 +208,7 @@ def bar_horiz(path, keys, config, collection):
 
 	plt.tight_layout()
 	save_png(path, title, fig)
+
 
 
 #
@@ -244,19 +246,19 @@ def plot_horiz(path, keys, config, collection):
 		#
 		#  And sort vales in x order (sigh)
 		#
-		#index//es = np.argsort(xvalues)
-		#xvalues = [ xvalues[i] for i in indexes ]
-		#yvalues = [ yvalues[i] for i in indexes ]
+		indexes = np.argsort(xvalues)
+		xvalues = [ xvalues[i] for i in indexes ]
+		yvalues = [ yvalues[i] for i in indexes ]
 
 		plot.plot(xvalues, yvalues, label = xlabel)
 		plot.grid(True)
 		plot.set_xticklabels(all_xlabels, rotation=90)
 		plot.set_xlabel(subtitle)
 		plot.set_ylabel(title + " (" + units + ")")
-		plot.set_ylim(ymin * 0.95, ymax * 1.05)
+		plot.set_ylim(ymin * 0.95, ymax * 1.20)
 		plot.set_xlim(0, len(all_xlabels) -1)
 	plt.title(title)
-	plt.legend(loc = 1)
+	plt.legend(loc = 1, prop={'size':10})
 	plt.tight_layout()
 	#plt.show()
 	save_png(path, title, fig)
@@ -307,9 +309,9 @@ def plot_samples_by_filesystem_cols(path, keys, title, data):
 			plots[i,j].plot(x, y, '.', color='black')
 			plots[i,j].set_xlabel('Sample #')
 			plots[i,j].set_ylabel(title)
-			plots[i,j].set_title(title + ', ' + subtitle + sysinfo_keys_to_label(sysinfo, keys))
+			plots[i,j].set_title(title + '\n' + subtitle + sysinfo_keys_to_label(sysinfo, keys))
 			plots[i,j].set_xlim(0, max_x)
-			plots[i,j].set_ylim(0, max_y)
+			plots[i,j].set_ylim(0, max_y * 1.15)
 			plots[i,j].yaxis.grid(True, which='both')
 
 		yy = sysinfo['mean_y']
@@ -317,7 +319,7 @@ def plot_samples_by_filesystem_cols(path, keys, title, data):
 		x = [0, max_x ]
 		y = [yy, yy]
 		plots[i,j].plot(x, y, label='Mean ' + '%.4f' % yy, color='red')
-		plots[i,j].legend(loc = 2)
+		plots[i,j].legend(loc = 1, prop={'size':10})
 		n = n + 1
 
 	plt.tight_layout()
@@ -543,6 +545,7 @@ def find_matching_stats(stats, criteria):
 						break
 				keep = keep and found
 		if keep:
+			print "Got " + cur
 			matches.append((cur, sysinfo, fio_stats))
 
 	return matches
@@ -587,6 +590,10 @@ def compare_stats_ordered_traverse(graph_func, stats, keys, order, stacked_keys,
 	if (len(order) <= 1):
 		sortstats = sorted(stats, key=lambda d: d[1][order[0]])
 		traversed_stats.append(sortstats)
+
+		print "Collection:"
+		for (cur, sysinfo, fio_stats) in sortstats:
+			print cur
 		return
 
 	#
@@ -628,7 +635,7 @@ def generate_html(path, html_file, title):
   <meta content="text/html; charset=ISO-8859-1"
  http-equiv="content-type">
   <title>''' + title + '''</title>
-  <h1><center>''' + title + '''</center></h1>'''
+  <h2><center>''' + title + '''</center></h2>'''
 
 
 	page += '''
@@ -636,7 +643,9 @@ def generate_html(path, html_file, title):
 <body>'''
 
 	for l in sorted(os.listdir(path)):
-		page += '\n  <img src=' + l + '><hr>'
+		(filename, extension) = os.path.splitext(l)
+		if extension == ".png":
+			page += '\n  <img src=' + l + '><br><br>'
 	page += '''
 </body>
 </html>''' 
@@ -656,11 +665,22 @@ def generate_html(path, html_file, title):
 def daily_tests_histogram(path, date):
 	tests = find_matching_stats(stats, [ ('Date', [date]), ('Job', []), ('Filesystem', []), ('Kernel-release', [])])
 	keys = keys_variant(tests)
-	newpath = os.path.join(path, 'daily-fio-histograms')
+
+	#
+	# Compare filesystems
+	#
+	newpath = os.path.join(path, 'daily-fio-histograms-by-filesystem')
 	mkdirp(newpath)
 	compare_stats_ordered(newpath, bar_horiz, tests, keys, ['Job', 'Filesystem', 'Date'], ['Job'])
 	generate_html(newpath, 'daily-tests-histogram', 'Test run on ' + date)
 
+	#
+	# Compare tests
+	#
+	newpath = os.path.join(path, 'daily-fio-histograms-by-test')
+	mkdirp(newpath)
+	compare_stats_ordered(newpath, bar_horiz, tests, keys, ['Filesystem', 'Date'], ['Filesystem'])
+	generate_html(newpath, 'daily-tests-histogram', 'Test run on ' + date)
 #
 #  Samples of fs on a given day
 # 
@@ -704,8 +724,9 @@ for i in range(1, len(sys.argv)):
 tmpdir = tempfile.mkdtemp()
 tmpdir = "/tmp/test"
 print "results in " + tmpdir
-overtime_trends(tmpdir)
+
 daily_tests_histogram(tmpdir, '2014-06-23')
+overtime_trends(tmpdir)
 daily_tests_samples(tmpdir, '2014-06-23')
 
 
