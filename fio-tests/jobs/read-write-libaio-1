@@ -15,7 +15,7 @@ mem_align=1
 group_reporting=1
 ioengine=libaio
 log_avg_msec=250
-runtime=600
+runtime=${RUNTIME}
 
 [job1]
 write_bw_log=job1

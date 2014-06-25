@@ -14,7 +14,7 @@ disk_util=1
 mem_align=1
 group_reporting=1
 log_avg_msec=250
-runtime=600
+runtime=${RUNTIME}
 
 [job1]
 write_bw_log=job1

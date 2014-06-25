@@ -2,6 +2,7 @@
 
 DEV=/dev/sda1
 MNT=/mnt
+RUNTIME=600
 
 do_fs_new()
 {
@@ -34,8 +35,9 @@ do_fs_new()
 	esac
 }
 
+ALL_JOBS=$( ls jobs | grep -v conf)
 
-for jobs in write-sync-seq-1 write-sync-seq-2 write-sync-seq-4
+for job in ${ALL_JOBS}
 do
 	for fs in ext4 xfs btrfs
 	do
@@ -44,7 +46,14 @@ do
 		do
 			umount $MNT
 			do_fs_new $fs
-			SIZE=2G DIRECTORY=$MNT ./fio.sh -$opt -j $jobs
+			echo $job | grep rand > /dev/null
+			if [ $? -eq 0 ]; then
+				sz=128M
+			else
+				sz=8G
+			fi
+			echo "Job: $job, Size $sz"
+			RUNTIME=${RUNTIME} SIZE=$sz DIRECTORY=$MNT ./fio.sh -$opt -j $job
 			umount $MNT
 		done
 	done
