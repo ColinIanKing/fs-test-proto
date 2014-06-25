@@ -1,6 +1,6 @@
 [global]
-name=write-sync-seq-4-thread
-description=sequential synchronous write
+name=write-libaio-seq-1-thread
+description=sequential write async libaio
 rw=write
 blocksize=${BLOCKSIZE}
 directory=${DIRECTORY}
@@ -13,6 +13,7 @@ clat_percentiles=1
 disk_util=1
 mem_align=1
 group_reporting=1
+ioengine=libaio
 log_avg_msec=250
 runtime=600
 
@@ -20,18 +21,3 @@ runtime=600
 write_bw_log=job1
 write_lat_log=job1
 write_iops_log=job1
-
-[job2]
-write_bw_log=job2
-write_lat_log=job2
-write_iops_log=job2
-
-[job3]
-write_bw_log=job3
-write_lat_log=job3
-write_iops_log=job3
-
-[job4]
-write_bw_log=job4
-write_lat_log=job4
-write_iops_log=job4

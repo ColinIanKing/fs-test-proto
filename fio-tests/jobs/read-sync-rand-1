@@ -1,7 +1,7 @@
 [global]
-name=write-sync-seq-4-thread
-description=sequential synchronous write
-rw=write
+name=read-sync-seq-1-thread
+description=random synchronous read
+rw=randread
 blocksize=${BLOCKSIZE}
 directory=${DIRECTORY}
 size=${SIZE}
@@ -20,18 +20,3 @@ runtime=600
 write_bw_log=job1
 write_lat_log=job1
 write_iops_log=job1
-
-[job2]
-write_bw_log=job2
-write_lat_log=job2
-write_iops_log=job2
-
-[job3]
-write_bw_log=job3
-write_lat_log=job3
-write_iops_log=job3
-
-[job4]
-write_bw_log=job4
-write_lat_log=job4
-write_iops_log=job4
