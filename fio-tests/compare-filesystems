@@ -288,9 +288,10 @@ def plot_samples_by_filesystem_cols(path, keys, title, data):
 		total_y = 0
 		total_n = 0
 		for (x, y) in values:
-			max_y = max(max_y, max(y))
-			total_y += sum(y)
-			total_n += len(y)
+			if len(y) > 0:
+				max_y = max(max_y, max(y))
+				total_y += sum(y)
+				total_n += len(y)
 		if total_n == 0:
 			sysinfo['mean_y'] = 0
 		else:
@@ -308,8 +309,14 @@ def plot_samples_by_filesystem_cols(path, keys, title, data):
 		j = n / nrows
 
 		for (x, y) in values:
-			max_x = max(x)
-			max_y = max(y)
+			if len(x) > 0:
+				max_x = max(x)
+			else:
+				max_x = 0
+			if len(y) > 0:
+				max_y = max(y)
+			else:
+				max_t = 0
 			plots[i,j].plot(x, y, '.', color='black')
 			plots[i,j].set_xlabel('Sample #')
 			plots[i,j].set_ylabel(title)
@@ -359,7 +366,11 @@ def hist_samples_by_filesystem_cols(path, keys, title, data):
 		for (x, y) in values:
 			total_y += sum(y)
 			total_n += len(y)
-		mean_y[row,col] = float(total_y) / total_n
+
+		if total_n != 0:
+			mean_y[row,col] = float(total_y) / total_n
+		else:
+			mean_y[row,col] = 0
 
 	fig, plots = plt.subplots(nrows, figsize=(8, 1.5 * nrows+ 1))
 	pos = np.arange(ncols)
@@ -571,11 +582,15 @@ def collect_stats(path):
 		head, tail = os.path.split(cur)
 		if tail == "stats":
 			sysinfo   = sysinfo_load(os.path.join(cur, 'sysinfo.log'))
-			f = open(os.path.join(cur, 'fio-stats.json'), 'r')
-			fio_stats = json.load(f)
-			f.close()
-			stats.append((cur, sysinfo, fio_stats))
 			job_config_get(sysinfo['Job'])
+			try:
+				f = open(os.path.join(cur, 'fio-stats.json'), 'r')
+				fio_stats = json.load(f)
+				f.close()
+				stats.append((cur, sysinfo, fio_stats))
+			except:
+				print "Failed to read fio-stats.json for " + cur
+				
 	return stats
 
 
@@ -781,8 +796,8 @@ for i in range(1, len(sys.argv)):
 tmpdir = "/tmp/test"
 print "results in " + tmpdir
 
-daily_tests_histogram(tmpdir, '2014-06-24')
-#daily_tests_samples(tmpdir, '2014-06-24')
+#daily_tests_histogram(tmpdir, '2014-06-25')
+daily_tests_samples(tmpdir, '2014-06-25')
 #overtime_trends(tmpdir)
 
 
