@@ -206,6 +206,8 @@ def bar_horiz(path, keys, config, collection):
 		plots[j].xaxis.grid(True, which='both')
 		plots[j].barh(pos, yvalues, align='center', color=colors)
 		plots[j].set_title(xlabel + "," + title + " (" + units + ")" + "\n" + subtitle)
+		if ymax == 0:
+			ymax = 1
 		plots[j].set_xlim(0, ymax * 1.025)
 		fig.sca(plots[j])
 		plt.yticks(pos, xlabels)
@@ -796,9 +798,9 @@ for i in range(1, len(sys.argv)):
 tmpdir = "/tmp/test"
 print "results in " + tmpdir
 
-#daily_tests_histogram(tmpdir, '2014-06-25')
+daily_tests_histogram(tmpdir, '2014-06-25')
 daily_tests_samples(tmpdir, '2014-06-25')
-#overtime_trends(tmpdir)
+overtime_trends(tmpdir)
 
 
 
