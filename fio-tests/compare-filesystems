@@ -141,13 +141,13 @@ def sysinfo_keys_to_label(sysinfo, keys):
 def save_png(path, title, fig):
 	str = ''
 	for c in title.lower():
-		if c in string.ascii_letters:
+		if c in string.ascii_letters or c in string.digits:
 			str += c
 		else:
 			str += '-'
 
 	filename = os.path.join(path, str + ".png")
-	fig.savefig(filename, dpi=70)
+	fig.savefig(filename, dpi=70, transparent=True)
 	return filename
 
 #
@@ -249,7 +249,6 @@ def plot_horiz(path, keys, config, collection):
 		xvalues = []
 		for x in xlabels:
 			xvalues.append(all_xlabels.index(x))
-
 		#
 		#  And sort vales in x order (sigh)
 		#
@@ -276,7 +275,7 @@ def plot_samples_by_filesystem_cols(path, keys, title, data):
 		if not sysinfo['Filesystem'] in cols:
 			cols.append(sysinfo['Filesystem'])
 
-	nplots = len(data)
+	nplots = len(data) 
 	ncols = len(cols)
 	nrows = nplots / ncols
 
@@ -305,9 +304,10 @@ def plot_samples_by_filesystem_cols(path, keys, title, data):
 			subtitle += sysinfo[k] + ", "
 
 	n = 0
+	print nrows
 	for (values, sysinfo) in data:
 		fs = sysinfo['Filesystem']
-		i = n % nrows
+		i = (n % nrows) 
 		j = n / nrows
 
 		for (x, y) in values:
@@ -318,14 +318,24 @@ def plot_samples_by_filesystem_cols(path, keys, title, data):
 			if len(y) > 0:
 				max_y = max(y)
 			else:
-				max_t = 0
+				max_y = 0
 			plots[i,j].plot(x, y, '.', color='black')
 			plots[i,j].set_xlabel('Sample #')
 			plots[i,j].set_ylabel(title)
 			plots[i,j].set_title(title + '\n' + subtitle + sysinfo_keys_to_label(sysinfo, keys))
-			plots[i,j].set_xlim(0, max_x)
-			plots[i,j].set_ylim(0, max_y * 1.15)
+			#plots[0,j].set_xlim(0, max_x)
+			#plots[0,j].set_ylim(0, max_y * 1.15)
 			plots[i,j].yaxis.grid(True, which='both')
+
+			if max_x > 0 and max_y > 0:
+				heatmap, yedges, xedges = np.histogram2d(y, x, bins=(16,32))
+				extent = [xedges[0], xedges[-1], yedges[0], yedges[-1]]
+#				plots[i+1,j].imshow(heatmap, extent=extent, aspect='auto', origin="lower")
+#			plots[i+1,j].set_xlabel('Sample #')
+#			plots[i+1,j].set_ylabel(title)
+			#plots[1,j].set_xlim(0, max_x)
+			#plots[1,j].set_ylim(0, max_y * 1.15)
+#			plots[i+1,j].set_title(title + '\n' + subtitle + sysinfo_keys_to_label(sysinfo, keys))
 
 		yy = sysinfo['mean_y']
 		fs = sysinfo['Filesystem']
@@ -334,9 +344,8 @@ def plot_samples_by_filesystem_cols(path, keys, title, data):
 		plots[i,j].plot(x, y, label='Mean ' + '%.4f' % yy, color='red')
 		plots[i,j].legend(loc = 1, prop={'size':10})
 		n = n + 1
-
 	plt.tight_layout()
-	save_png(path, title, fig)
+	save_png(path, title + '-2-graphs', fig)
 	return
 
 def hist_samples_by_filesystem_cols(path, keys, title, data):
@@ -385,7 +394,7 @@ def hist_samples_by_filesystem_cols(path, keys, title, data):
 		plt.yticks(pos, cols)
 
 	plt.tight_layout()
-	save_png(path, title + "-histogram", fig)
+	save_png(path, title + '-1-histogram', fig)
 	return
 
 
@@ -708,13 +717,20 @@ def generate_html(path, html_file, title):
 
 	page += '''
 </head>
-<body>'''
-
+<body>
+<center>
+  <table width=100% cellspacing="10">
+'''
+	colors = [ "#ffffff", "#f0f0ff" ]
+	i = 0
 	for l in sorted(os.listdir(path)):
 		(filename, extension) = os.path.splitext(l)
 		if extension == ".png":
-			page += '\n  <center><img src=' + l + '></center><br><br>'
+			page += '\n <tr><td bgcolor="' + colors[i % 2] + '"><center><img src=' + l + '></center></td></tr>'
+			i += 1
 	page += '''
+  </table>
+</center>
 </body>
 </html>'''
 
@@ -798,9 +814,9 @@ for i in range(1, len(sys.argv)):
 tmpdir = "/tmp/test"
 print "results in " + tmpdir
 
-daily_tests_histogram(tmpdir, '2014-06-25')
+#daily_tests_histogram(tmpdir, '2014-06-25')
 daily_tests_samples(tmpdir, '2014-06-25')
-overtime_trends(tmpdir)
+#overtime_trends(tmpdir)
 
 
 
