@@ -279,7 +279,6 @@ def plot_samples_by_filesystem_cols(path, keys, title, data):
 	ncols = len(cols)
 	nrows = nplots / ncols
 
-	fig, plots = plt.subplots(nrows=nrows, ncols=ncols, figsize=(5 * ncols,  3 * nrows))
 
 	max_y = 0
 	#
@@ -303,8 +302,52 @@ def plot_samples_by_filesystem_cols(path, keys, title, data):
 		if not k in keys:
 			subtitle += sysinfo[k] + ", "
 
-	n = 0
-	print nrows
+	for j in range(0, nrows):
+		fig, plots = plt.subplots(nrows=2, ncols=ncols, figsize=(5 * ncols, 6))
+		for i in range(0, ncols):
+			index = (i * nrows) + j
+			(values, sysinfo) = data[index]
+
+			for (x, y) in values:
+				if len(x) > 0:
+					max_x = max(x)
+				else:
+					max_x = 0
+				if len(y) > 0:
+					max_y = max(y)
+				else:
+					max_y = 0
+				plots[0][i].plot(x, y, '.', color='black')
+				plots[0][i].set_xlabel('Sample #')
+				plots[0][i].set_ylabel(title)
+				plots[0][i].set_title(title + '\n' + subtitle + sysinfo_keys_to_label(sysinfo, keys))
+				#plots[i].set_xlim(0, max_x)
+				#plots[i].set_ylim(0, max_y * 1.15)
+				plots[0][i].yaxis.grid(True, which='both')
+	
+				if max_x > 0 and max_y > 0:
+					heatmap, yedges, xedges = np.histogram2d(y, x, bins=(16,32))
+					extent = [xedges[0], xedges[-1], yedges[0], yedges[-1]]
+					plots[1,i].imshow(heatmap, extent=extent, aspect='auto', origin="lower")
+				plots[1,i].set_xlabel('Sample #')
+				plots[1,i].set_ylabel(title)
+				#plots[1,i].set_xlim(0, max_x)
+				#plots[1,i].set_ylim(0, max_y * 1.15)
+				plots[1,i].set_title(title + '\n' + subtitle + sysinfo_keys_to_label(sysinfo, keys))
+
+			yy = sysinfo['mean_y']
+			fs = sysinfo['Filesystem']
+			x = [0, max_x ]
+			y = [yy, yy]
+			plots[0][i].plot(x, y, label='Mean ' + '%.4f' % yy, color='red')
+			plots[0][i].legend(loc = 1, prop={'size':10})
+
+		plt.tight_layout()
+		save_png(path, title + '-2-graphs+%3.3d' % j, fig)
+
+	return
+
+	
 	for (values, sysinfo) in data:
 		fs = sysinfo['Filesystem']
 		i = (n % nrows) 
