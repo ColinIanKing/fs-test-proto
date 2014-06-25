@@ -107,7 +107,7 @@ def keys_variant(stats):
 	return keys
 
 #
-#
+#  Remove trailing comma and spaces from label
 #
 def clean_label(label):
 	str = label
@@ -158,7 +158,7 @@ def bar_horiz(path, keys, config, collection):
 	units = config['Units']
 
 	nplots = len(collection)
-	fig, plots = plt.subplots(nplots, figsize=(8, 1.5 * nplots + 1))
+	nbars = 0
 	colors ='rgbwmc'
 
 	#
@@ -179,10 +179,13 @@ def bar_horiz(path, keys, config, collection):
 				all_xlabels.append(xlabel)
 		ymax = max(ymax, max(yvalues))
 		ymin = min(ymin, min(yvalues))
+		nbars += len(yvalues)
 
 	all_xlabels = sorted(all_xlabels, reverse=True)
 
 	(subtitle, xlabels, yvalues, xlabel) = collection[0]
+
+	fig, plots = plt.subplots(nplots, figsize=(8, (0.25 * nbars) + (0.75 * nplots)))
 
 	j = 0
 	for c in collection:
@@ -198,11 +201,12 @@ def bar_horiz(path, keys, config, collection):
 		indexes = np.argsort(xlabels)[::-1]
 		xlabels = [ xlabels[i] for i in indexes ]
 		yvalues = [ yvalues[i] for i in indexes ]
-		pos = range(1, len(xlabels)+1, 1)
+		pos = np.arange(len(xlabels))
 
 		plots[j].xaxis.grid(True, which='both')
 		plots[j].barh(pos, yvalues, align='center', color=colors)
 		plots[j].set_title(xlabel + "," + title + " (" + units + ")" + "\n" + subtitle)
+		plots[j].set_xlim(0, ymax * 1.025)
 		fig.sca(plots[j])
 		plt.yticks(pos, xlabels)
 		j = j + 1
@@ -546,14 +550,15 @@ def compare_stats(path, graph_func, stats_collection, keys, stacked_keys):
 								sysinfovals[c].append(sysinfo[c])
 						except:
 							sysinfovals[c] = [sysinfo[c]]
-
 				xlabel = []
 				for f in stacked_keys:
 					xlabel.append(sysinfo[f])
+	
 			#
 			# Add them to the subplot collection
 			#
-			collection.append((array_to_str(subtitle), xlabels, yvalues, array_to_str(xlabel)))
+			if len(xlabels) > 0:
+				collection.append((array_to_str(subtitle), xlabels, yvalues, array_to_str(xlabel)))
 
 		graph_func(path, keys, config, collection)
 
@@ -776,9 +781,9 @@ for i in range(1, len(sys.argv)):
 tmpdir = "/tmp/test"
 print "results in " + tmpdir
 
-daily_tests_histogram(tmpdir, '2014-06-23')
-daily_tests_samples(tmpdir, '2014-06-23')
-overtime_trends(tmpdir)
+daily_tests_histogram(tmpdir, '2014-06-24')
+#daily_tests_samples(tmpdir, '2014-06-24')
+#overtime_trends(tmpdir)
 
 
 
