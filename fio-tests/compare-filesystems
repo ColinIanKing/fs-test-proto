@@ -138,15 +138,19 @@ def sysinfo_keys_to_label(sysinfo, keys):
 		label = label + sysinfo[key]
 	return label
 
-def save_png(path, title, fig):
-	str = ''
-	for c in title.lower():
+def str_to_filename(str):
+	filename = ''
+	for c in str.lower():
 		if c in string.ascii_letters or c in string.digits:
-			str += c
+			filename += c
 		else:
-			str += '-'
+			filename += '-'
 
-	filename = os.path.join(path, str + ".png")
+	return filename
+
+def save_png(path, title, fig):
+	filename = os.path.join(path, str_to_filename(title) + ".png")
+	print "save_png" + filename
 	fig.savefig(filename, dpi=70, transparent=True)
 	return filename
 
@@ -156,67 +160,50 @@ def save_png(path, title, fig):
 def bar_horiz(path, keys, config, collection):
 	title = config['Label']
 	units = config['Units']
-
-	nplots = len(collection)
-	nbars = 0
 	colors ='rgbwmc'
 
 	#
 	#  Sort collection on xlabel
 	#
 	collection = sorted(collection, key=lambda d: d[3])
-
-	#
-	#  Determine all the xlabels in the collection
-	#
-	all_xlabels = []
-	ymax = 0
-	ymin = 1e12
-	for c in collection:
-		(subtitle, xlabels, yvalues, xlabel) = c
-		for xlabel in xlabels:
-			if not xlabel in all_xlabels:
-				all_xlabels.append(xlabel)
-		ymax = max(ymax, max(yvalues))
-		ymin = min(ymin, min(yvalues))
-		nbars += len(yvalues)
-
-	all_xlabels = sorted(all_xlabels, reverse=True)
-
 	(subtitle, xlabels, yvalues, xlabel) = collection[0]
+	filename = str_to_filename(title)
+	newpath = os.path.join(path, filename)
+	mkdirp(newpath)
 
-	fig, plots = plt.subplots(nplots, figsize=(8, (0.25 * nbars) + (0.75 * nplots)))
-
-	j = 0
+	n = 0
 	for c in collection:
 		(subtitle, xlabels, yvalues, xlabel) = c
+		nbars = len(yvalues)
+		fig, plot = plt.subplots(1, figsize=(9, 1 + (0.35 * nbars)))
 
 		xvalues = []
 		for x in xlabels:
 			xvalues.append(xlabels.index(x))
 
+		ymin = min(yvalues)
+		ymax = max(yvalues)
+		if ymax - ymin == 0:
+			ymax = 1
 		#
 		#  And sort values in x order (sigh)
 		#
 		indexes = np.argsort(xlabels)[::-1]
 		xlabels = [ xlabels[i] for i in indexes ]
 		yvalues = [ yvalues[i] for i in indexes ]
-		pos = np.arange(len(xlabels))
+		pos = np.arange(len(xlabels)) + 0.5
 
-		plots[j].xaxis.grid(True, which='both')
-		plots[j].barh(pos, yvalues, align='center', color=colors)
-		plots[j].set_title(xlabel + "," + title + " (" + units + ")" + "\n" + subtitle)
-		if ymax == 0:
-			ymax = 1
-		plots[j].set_xlim(0, ymax * 1.025)
-		fig.sca(plots[j])
+		plot.set_xlim(ymin, ymax)
+		plot.xaxis.grid(True, which='both')
+		plot.yaxis.grid(True, which='both')
+		plot.barh(pos, yvalues, align='center', color=colors)
+		plt.title(xlabel + ": " + title + " (" + units + ")" + "\n" + subtitle)
+
 		plt.yticks(pos, xlabels)
-		j = j + 1
-
-	plt.tight_layout()
-	save_png(path, title, fig)
-
-
+		plt.tight_layout()
+		save_png(newpath, title + "-%3.3d" % n, fig)
+		n = n + 1
+	generate_html(newpath, filename, title)
 
 #
 #  Very simple graph plot
@@ -245,7 +232,6 @@ def plot_horiz(path, keys, config, collection):
 
 	for c in collection:
 		(subtitle, xlabels, yvalues, xlabel) = c
-
 		xvalues = []
 		for x in xlabels:
 			xvalues.append(all_xlabels.index(x))
@@ -263,6 +249,7 @@ def plot_horiz(path, keys, config, collection):
 		plot.set_ylabel(title + " (" + units + ")")
 		plot.set_ylim(ymin * 0.80, ymax * 1.05)
 		plot.set_xlim(0, len(all_xlabels) -1)
+
 	plt.title(title)
 	plt.legend(loc = 6, prop={'size':10})
 	plt.tight_layout()
@@ -341,7 +328,7 @@ def plot_samples_by_filesystem_cols(path, keys, title, data):
 			plots[0][i].legend(loc = 1, prop={'size':10})
 
 		plt.tight_layout()
-		save_png(path, title + '-2-graphs+%3.3d' % j, fig)
+		save_png(path, title + '-2-graphs-%3.3d' % j, fig)
 
 	return
 
@@ -718,7 +705,7 @@ def generate_html(path, html_file, title):
 <center>
   <table width=100% cellspacing="10">
 '''
-	colors = [ "#ffffff", "#f0f0ff" ]
+	colors = [ "#ffffff", "#e0f0ff" ]
 	i = 0
 	for l in sorted(os.listdir(path)):
 		(filename, extension) = os.path.splitext(l)
@@ -812,7 +799,7 @@ tmpdir = "/tmp/test"
 print "results in " + tmpdir
 
 daily_tests_histogram(tmpdir, '2014-06-31')
-daily_tests_samples(tmpdir, '2014-06-31')
+#daily_tests_samples(tmpdir, '2014-06-31')
 #overtime_trends(tmpdir)
 
 
