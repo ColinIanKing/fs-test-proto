@@ -28,33 +28,94 @@ mk_fio()
 
 do_fs_new()
 {
+	#
+	#  Zap the partition
+	#
+	dd if=/dev/zero of=$DEV bs=1M count=64
+
 	case $1 in
 	ext2)
 		mkfs.ext2 -F $DEV
+		if [ $? -ne 0 ]; then
+			#
+			#  Older versions don't have -F option
+			#
+			mkfs.ext2 $DEV
+			if [ $? -ne 0 ]; then
+				return 1
+			fi
+		fi
 		mount $DEV $MNT
 		;;
 	ext3)
 		mkfs.ext3 -F $DEV
+		if [ $? -ne 0 ]; then
+			#
+			#  Older versions don't have -F option
+			#
+			mkfs.ext3 $DEV
+			if [ $? -ne 0 ]; then
+				return 1
+			fi
+		fi
 		mount $DEV $MNT
 		;;
 			
 	ext4)
 		mkfs.ext4 -F $DEV
+		if [ $? -ne 0 ]; then
+			#
+			#  Older versions don't have -F option
+			#
+			mkfs.ext4 $DEV
+			if [ $? -ne 0 ]; then
+				return 1
+			fi
+		fi
 		mount $DEV $MNT
 		;;
 	xfs)
 		mkfs.xfs -f $DEV
+		if [ $? -ne 0 ]; then
+			#
+			#  Older versions don't have -f option
+			#
+			mkfs.xfs $DEV
+			if [ $? -ne 0 ]; then
+				return 1
+			fi
+		fi
 		mount $DEV $MNT
 		;;
 	btrfs)
 		mkfs.btrfs -f $DEV
+		if [ $? -ne 0 ]; then
+			#
+			#  Older versions don't have -f option
+			#
+			mkfs.btrfs $DEV
+			if [ $? -ne 0 ]; then
+				return 1
+			fi
+		fi
 		mount $DEV $MNT
 		;;
 	*)
 		mkfs.ext4 -F $DEV
+		if [ $? -ne 0 ]; then
+			#
+			#  Older versions don't have -F option
+			#
+			mkfs.ext4 $DEV
+			if [ $? -ne 0 ]; then
+				return 1
+			fi
+		fi
 		mount $DEV $MNT
 		;;
 	esac
+
+	return 0
 }
 
 mk_fio
@@ -100,9 +161,11 @@ do
 		do
 			umount $MNT
 			do_fs_new $fs
-			echo "Job: $job, Size $sz"
-			RUNTIME=${RUNTIME} SIZE=${MIN_FILE_SIZE}K DIRECTORY=$MNT ./fio.sh -$opt -j $job -F ${FIO}
-			umount $MNT
+			if [ $? -eq 0 ]; then
+				echo "Job: $job, Size $sz"
+				RUNTIME=${RUNTIME} SIZE=${MIN_FILE_SIZE}K DIRECTORY=$MNT ./fio.sh -$opt -j $job -F ${FIO}
+				umount $MNT
+			fi
 		done
 	done
 done
