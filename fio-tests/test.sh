@@ -37,6 +37,14 @@ do_fs_new()
 	esac
 }
 
+while getopts "d:" opt; do
+	case $opt in
+	d)
+		DEV=$OPTARG
+		;;
+	esac
+done
+
 if [ -z $DEV ]; then
 	echo "DEV is not defined. Exiting"
 	exit 1
