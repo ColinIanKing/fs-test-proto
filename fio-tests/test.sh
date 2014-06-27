@@ -118,9 +118,6 @@ do_fs_new()
 	return 0
 }
 
-mk_fio
-exit
-
 while getopts "d:m:" opt; do
 	case $opt in
 	d)
