@@ -37,10 +37,13 @@ do_fs_new()
 	esac
 }
 
-while getopts "d:" opt; do
+while getopts "d:m:" opt; do
 	case $opt in
 	d)
 		DEV=$OPTARG
+		;;
+	m)
+		MIN_FILE_SIZE=$OPTARG
 		;;
 	esac
 done
