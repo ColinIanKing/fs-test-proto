@@ -5,6 +5,26 @@ MIN_FILE_SIZE=$((MEM_TOTAL_K * 2))
 #DEV=/dev/sda1
 MNT=/mnt
 RUNTIME=900
+HERE=$(pwd)
+FIO=${HERE}/fio/fio
+
+mk_fio()
+{
+	if [ ! -x $FIO ]; then
+		gunzip < ../tools/fio-2.1.9.tar.gz | tar xvf -
+		cd fio
+		make clean
+		make -j 4
+		rc=$?
+		cd ..
+		if [ $rc -ne 0 ]; then
+			echo "Cannot build fio"
+			exit 1
+		fi
+	fi
+
+	echo "fio: $FIO"
+}
 
 do_fs_new()
 {
@@ -36,6 +56,9 @@ do_fs_new()
 		;;
 	esac
 }
+
+mk_fio
+exit
 
 while getopts "d:m:" opt; do
 	case $opt in
@@ -78,7 +101,7 @@ do
 			umount $MNT
 			do_fs_new $fs
 			echo "Job: $job, Size $sz"
-			RUNTIME=${RUNTIME} SIZE=${MIN_FILE_SIZE}K DIRECTORY=$MNT ./fio.sh -$opt -j $job
+			RUNTIME=${RUNTIME} SIZE=${MIN_FILE_SIZE}K DIRECTORY=$MNT ./fio.sh -$opt -j $job -F ${FIO}
 			umount $MNT
 		done
 	done
