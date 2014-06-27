@@ -9,6 +9,7 @@ DATE_NOW=$(date +%F)
 TIME_NOW=$(date +%H%M)
 KERNEL=$(uname -r)
 ID=$(cat /dev/urandom | tr -dc 'a-f0-9' | fold -w 12 | head -n 1)
+FIO=fio
 
 TMP=/tmp
 
@@ -94,7 +95,7 @@ log_job_info()
 
 stats()
 {
-	fio $* ${ROOT_PATH}/jobs/${JOB} --output-format=json --output=${RESULTS_PATH}/fio-stats.json
+	$FIO $* ${ROOT_PATH}/jobs/${JOB} --output-format=json --output=${RESULTS_PATH}/fio-stats.json
 	#echo "Generating plots.."
 	#fio_generate_plots ${JOB} >& /dev/null
 }
@@ -117,7 +118,7 @@ heatmap()
 	# From http://www.brendangregg.com/perf.html
 	#
 	perf record -e block:block_rq_issue -e block:block_rq_complete \
-		fio $* ${ROOT_PATH}/jobs/${JOB}
+		$FIO $* ${ROOT_PATH}/jobs/${JOB}
 	perf script | awk '{ gsub(/:/, "") } $5 ~ /issue/ { ts[$6, $10] = $4 }
     		$5 ~ /complete/ { if (l = ts[$6, $9]) { printf "%.f %.f\n", $4 * 1000000,
     		($4 - l) * 1000000; ts[$6, $10] = 0 } }' > ${LATENCY_US}
@@ -135,7 +136,7 @@ flamegraph()
         	exit 1
 	fi
 
-	perf record -F ${PERF_FREQ} -g -- fio $* ${ROOT_PATH}/jobs/${JOB}
+	perf record -F ${PERF_FREQ} -g -- $FIO $* ${ROOT_PATH}/jobs/${JOB}
 
 	if [ ! -d ${ROOT_PATH}/${FLAMEGRAPH} ]; then
         	git clone https://github.com/brendangregg/FlameGraph.git ${FLAMEGRAPH}
@@ -153,6 +154,9 @@ st=0
 while [ ! -z $1 ]
 do
 	case $1 in
+	-F)
+		FIO=$OPTARG
+		;;
 	-f)
 		echo "FlameGraph"
 		fg=1
