@@ -147,6 +147,8 @@ if [ $mounts -ne 0 ]; then
 	exit 1
 fi
 
+mk_fio
+
 ALL_JOBS=$(ls jobs | grep -v conf)
 
 for job in ${ALL_JOBS}
