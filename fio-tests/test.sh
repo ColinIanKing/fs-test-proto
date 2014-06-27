@@ -2,7 +2,7 @@
 
 MEM_TOTAL_K=$(grep MemTotal /proc/meminfo  | awk '{print $2}')
 MIN_FILE_SIZE=$((MEM_TOTAL_K * 2))
-DEV=/dev/sda1
+#DEV=/dev/sda1
 MNT=/mnt
 RUNTIME=900
 
@@ -37,7 +37,20 @@ do_fs_new()
 	esac
 }
 
-ALL_JOBS=$( ls jobs | grep -v conf)
+if [ -z $DEV ]; then
+	echo "DEV is not defined. Exiting"
+	exit 1
+fi
+
+mounts=$(mount | grep $DEV | wc -l)
+if [ $mounts -ne 0 ]; then
+	echo "Mounts on $DEV:"
+	mount | grep $DEV
+	echo "Device $DEV has file systems mounted on it. Exiting"
+	exit 1
+fi
+
+ALL_JOBS=$(ls jobs | grep -v conf)
 
 for job in ${ALL_JOBS}
 do
