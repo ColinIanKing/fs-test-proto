@@ -78,7 +78,7 @@ do
 			umount $MNT
 			do_fs_new $fs
 			echo "Job: $job, Size $sz"
-			RUNTIME=${RUNTIME} SIZE=${MIN_FILE_SIZE} DIRECTORY=$MNT ./fio.sh -$opt -j $job
+			RUNTIME=${RUNTIME} SIZE=${MIN_FILE_SIZE}K DIRECTORY=$MNT ./fio.sh -$opt -j $job
 			umount $MNT
 		done
 	done
