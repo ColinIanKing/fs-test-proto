@@ -42,6 +42,11 @@ if [ -z $DEV ]; then
 	exit 1
 fi
 
+if [ ! -b $DEV ]; then
+	echo "Device $DEV does not exist. Exiting"
+	exit 1
+fi
+
 mounts=$(mount | grep $DEV | wc -l)
 if [ $mounts -ne 0 ]; then
 	echo "Mounts on $DEV:"
