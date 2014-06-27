@@ -1,8 +1,10 @@
 #!/bin/bash 
 
+MEM_TOTAL_K=$(grep MemTotal /proc/meminfo  | awk '{print $2}')
+MIN_FILE_SIZE=$((MEM_TOTAL_K * 2))
 DEV=/dev/sda1
 MNT=/mnt
-RUNTIME=600
+RUNTIME=900
 
 do_fs_new()
 {
@@ -46,14 +48,8 @@ do
 		do
 			umount $MNT
 			do_fs_new $fs
-			echo $job | grep rand > /dev/null
-			if [ $? -eq 0 ]; then
-				sz=128M
-			else
-				sz=8G
-			fi
 			echo "Job: $job, Size $sz"
-			RUNTIME=${RUNTIME} SIZE=$sz DIRECTORY=$MNT ./fio.sh -$opt -j $job
+			RUNTIME=${RUNTIME} SIZE=${MIN_FILE_SIZE} DIRECTORY=$MNT ./fio.sh -$opt -j $job
 			umount $MNT
 		done
 	done
