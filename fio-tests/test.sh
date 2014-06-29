@@ -162,7 +162,7 @@ if [ $mounts -ne 0 ]; then
 	echo "Device $DEV has file systems mounted on it. Exiting"
 	exit 1
 fi
-BASEDEV=$(echo $DEV | sed 's/[0-9]*//g')
+BASEDEV=$(basename $DEV | sed 's/[0-9]*//g')
 
 mk_fio
 
@@ -178,8 +178,8 @@ do
 			umount $MNT
 			do_fs_new $fs
 			if [ $? -eq 0 ]; then
-				echo "Job: $job, Size $sz"
-				echo ${IOSCHED} > /sys/block/<device>/queue/scheduler
+				echo "Job: $job, Size $sz, IOsched $IOSCHED"
+				echo ${IOSCHED} > /sys/block/$BASEDEV/queue/scheduler
 				RUNTIME=${RUNTIME} SIZE=${MIN_FILE_SIZE} DIRECTORY=$MNT ./fio.sh -$opt -j $job -F ${FIO} -s ${IOSCHED}
 				umount $MNT
 			fi

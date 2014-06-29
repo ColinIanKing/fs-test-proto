@@ -32,7 +32,7 @@ fi
 #
 FILE_SYSTEM=$(df -T "${DIRECTORY}" | awk '{print $2}' | tail -n1)
 DEVICE=$(df -T "${DIRECTORY}" | awk '{print $1}' | tail -n1)
-BASEDEV=$(echo $DEVICE | sed 's/[0-9]*//g')
+BASEDEV=$(basename $DEVICE | sed 's/[0-9]*//g')
 IOSCHED=$(cat /sys/block/$BASEDEV/queue/scheduler)
 MOUNT_OPTS=$(mount -l | grep $DEVICE |awk '{ print substr($0, index($0,$6)) }')
 
