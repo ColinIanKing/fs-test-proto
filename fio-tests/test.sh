@@ -180,7 +180,7 @@ do
 			if [ $? -eq 0 ]; then
 				echo "Job: $job, Size $sz, IOsched $IOSCHED"
 				echo ${IOSCHED} > /sys/block/$BASEDEV/queue/scheduler
-				RUNTIME=${RUNTIME} SIZE=${MIN_FILE_SIZE} DIRECTORY=$MNT ./fio.sh -$opt -j $job -F ${FIO} -s ${IOSCHED}
+				RUNTIME=${RUNTIME} SIZE=${MIN_FILE_SIZE} DIRECTORY=$MNT ./fio.sh -$opt -j $job -F ${FIO}
 				umount $MNT
 			fi
 		done
