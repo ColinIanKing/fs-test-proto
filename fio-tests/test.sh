@@ -118,6 +118,11 @@ do_fs_new()
 	return 0
 }
 
+if [ $UID -ne 0 ]; then
+	echo "Need to be root to run test"
+	exit 1
+fi
+
 while getopts "d:m:s:" opt; do
 	case $opt in
 	d)
