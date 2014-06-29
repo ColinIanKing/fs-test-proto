@@ -118,7 +118,7 @@ do_fs_new()
 	return 0
 }
 
-while getopts "d:m:" opt; do
+while getopts "d:m:s:" opt; do
 	case $opt in
 	d)
 		DEV=$OPTARG
@@ -126,8 +126,24 @@ while getopts "d:m:" opt; do
 	m)
 		MIN_FILE_SIZE=$OPTARG
 		;;
+	s)
+		IOSCHED=$OPTARG
+		case $IOSCHED in
+		noop | cfq | deadline)
+			;;
+		*)
+			echo "IO schediler must be one of noop, cfq or deadline"
+			exit 1
+			;;
+		esac
+		;;
 	esac
 done
+
+if [ -z $IOSCHED ]; then
+	echo "IOSCHED is not defined. Exiting"
+	exit 1
+fi
 
 if [ -z $DEV ]; then
 	echo "DEV is not defined. Exiting"
@@ -146,6 +162,7 @@ if [ $mounts -ne 0 ]; then
 	echo "Device $DEV has file systems mounted on it. Exiting"
 	exit 1
 fi
+BASEDEV=$(echo $DEV | sed 's/[0-9]*//g')
 
 mk_fio
 
@@ -162,7 +179,8 @@ do
 			do_fs_new $fs
 			if [ $? -eq 0 ]; then
 				echo "Job: $job, Size $sz"
-				RUNTIME=${RUNTIME} SIZE=${MIN_FILE_SIZE} DIRECTORY=$MNT ./fio.sh -$opt -j $job -F ${FIO}
+				echo ${IOSCHED} > /sys/block/<device>/queue/scheduler
+				RUNTIME=${RUNTIME} SIZE=${MIN_FILE_SIZE} DIRECTORY=$MNT ./fio.sh -$opt -j $job -F ${FIO} -s ${IOSCHED}
 				umount $MNT
 			fi
 		done
