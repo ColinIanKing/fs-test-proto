@@ -45,11 +45,6 @@ SIZE=${SIZE:-${MEM_TOTAL_DOUBLE_KB}K}
 # No blocksize, default to 4K
 #
 BLOCKSIZE=${BLOCKSIZE:-4K}
-#
-# No iterations set, default to 5 so we can calc std.dev.
-# on the fio-stats data on the -s stats test
-#
-LOOPS=${LOOPS:-5}
 
 #
 # Dump info about the system we are running the test on
