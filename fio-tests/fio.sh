@@ -202,7 +202,7 @@ export DIRECTORY=${DIRECTORY}
 
 if [ $fg -eq 1 ]; then
 	SCENARIO=flamegraph
-	RESULTS_PATH=${ROOT_PATH}/${RESULTS}/${DATE_NOW}/job-${JOB}-kv-${KERNEL}-size-${SIZE}-bs-${BLOCKSIZE}-fs-${FILE_SYSTEM}-${ID}/${SCENARIO}
+	RESULTS_PATH=${ROOT_PATH}/${RESULTS}/${DATE_NOW}/job-${JOB}-kv-${KERNEL}-size-${SIZE}-bs-${BLOCKSIZE}-fs-${FILE_SYSTEM}-sched-${IOSCHED}-${ID}/${SCENARIO}
 	mkdir -p ${RESULTS_PATH}
 	log_job_info
 	cd ${RESULTS_PATH}
@@ -211,8 +211,8 @@ if [ $fg -eq 1 ]; then
 fi
 
 if [ $hm -eq 1 ]; then
-	SCENARIO=heapmap
-	RESULTS_PATH=${ROOT_PATH}/${RESULTS}/${DATE_NOW}/job-${JOB}-kv-${KERNEL}-size-${SIZE}-bs-${BLOCKSIZE}-fs-${FILE_SYSTEM}-${ID}/${SCENARIO}
+	SCENARIO=heatmap
+	RESULTS_PATH=${ROOT_PATH}/${RESULTS}/${DATE_NOW}/job-${JOB}-kv-${KERNEL}-size-${SIZE}-bs-${BLOCKSIZE}-fs-${FILE_SYSTEM}-sched-${IOSCHED}-${ID}/${SCENARIO}
 	mkdir -p ${RESULTS_PATH}
 	log_job_info 
 	cd ${RESULTS_PATH}
@@ -222,7 +222,7 @@ fi
 
 if [ $st -eq 1 ]; then
 	SCENARIO=stats
-	RESULTS_PATH=${ROOT_PATH}/${RESULTS}/${DATE_NOW}/job-${JOB}-kv-${KERNEL}-size-${SIZE}-bs-${BLOCKSIZE}-fs-${FILE_SYSTEM}-${ID}/${SCENARIO}
+	RESULTS_PATH=${ROOT_PATH}/${RESULTS}/${DATE_NOW}/job-${JOB}-kv-${KERNEL}-size-${SIZE}-bs-${BLOCKSIZE}-fs-${FILE_SYSTEM}-sched-${IOSCHED}-${ID}/${SCENARIO}
 	mkdir -p ${RESULTS_PATH}
 	log_job_info
 	cd ${RESULTS_PATH}
