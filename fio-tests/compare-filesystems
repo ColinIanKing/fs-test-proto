@@ -98,18 +98,18 @@ def job_config_get(job):
 #
 #  Variants of keys?
 #
-def keys_variant(stats):
+def keys_variant_collection(part_stats):
 	skipkeys = [ 'Time', 'Kernel-version', 'Full Date']
 	keys = []
-	for (cur, sysinfo1, fio_stats) in stats:
-		for (cur, sysinfo2, fio_stats) in stats:
-			for key in sysinfo2:
-				try:
-					if not key in keys and not key in skipkeys and sysinfo1[key] != sysinfo2[key]:
-						keys.append(key)
-				except:
-					pass
-
+	for stats in part_stats:
+		for (cur, sysinfo1, fio_stats) in stats:
+			for (cur, sysinfo2, fio_stats) in stats:
+				for key in sysinfo2:
+					try:
+						if not key in keys and not key in skipkeys and sysinfo1[key] != sysinfo2[key]:
+							keys.append(key)
+					except:
+						pass
 	return keys
 
 #
@@ -125,21 +125,14 @@ def clean_label(label):
 #  Take an array of words and return words as a comma separated string
 #
 def array_to_str(array):
-	#  Must be a better way to do this
-	str = ""
-	for a in array:
-		if str != "":
-			str = str + ", "
-		str = str + a
-	return str
+	return ', '.join(array)
 
 def sysinfo_keys_to_label(sysinfo, keys):
-	label = ""
+	label = []
 	for key in keys:
-		if label != "":
-			label = label + ", "
-		label = label + sysinfo[key]
-	return label
+		label.append(sysinfo[key])
+
+	return ', '.join(label)
 
 #
 #  Convert a string into a filename containing letters and digits
@@ -168,16 +161,32 @@ def save_png(path, title, fig):
 def bar_horiz(html_subdirs, root_path, keys, config, collection):
 	title = config['Label']
 	units = config['Units']
-	colors ='rgbwmc'
+
+	print "Graphing " + title
+
+	#
+	#  Filename based on title..
+	#
+	filename = str_to_filename(title)
+	newpath = os.path.join(root_path, filename)
+	mkdirp(newpath)
 
 	#
 	#  Sort collection on xlabel
 	#
 	collection = sorted(collection, key=lambda d: d[3])
-	(subtitle, xlabels, yvalues, xlabel) = collection[0]
-	filename = str_to_filename(title)
-	newpath = os.path.join(root_path, filename)
-	mkdirp(newpath)
+
+	#
+	#  Collect up end labels, see how many there are and
+	#  this allows us to determine how to color the bars
+	#
+	endlabels = []
+	for (subtitle, xlabels, yvalues, xlabel) in collection:
+		for l in xlabels:
+			end = l.split()[::-1][0]
+			if not end in endlabels:
+				endlabels.append(end)
+	colors ='rgbwmcrgbwnc'[0:len(endlabels)]
 
 	n = 0
 	for c in collection:
@@ -189,7 +198,7 @@ def bar_horiz(html_subdirs, root_path, keys, config, collection):
 		for x in xlabels:
 			xvalues.append(xlabels.index(x))
 
-		ymin = min(yvalues)
+		ymin = 0 # min(yvalues)
 		ymax = max(yvalues)
 		if ymax - ymin == 0:
 			ymax = 1
@@ -202,6 +211,7 @@ def bar_horiz(html_subdirs, root_path, keys, config, collection):
 		pos = np.arange(len(xlabels)) + 0.5
 
 		plot.set_xlim(ymin, ymax)
+		plot.set_ylim(0, len(xlabels))
 		plot.xaxis.grid(True, which='both')
 		plot.yaxis.grid(True, which='both')
 		plot.barh(pos, yvalues, align='center', color=colors)
@@ -238,7 +248,7 @@ def plot_horiz(html_subdirs, path, keys, config, collection):
 		ymax = max(ymax, max(yvalues))
 		ymin = min(ymin, min(yvalues))
 
-	#print title, len(all_xlabels), ymin, ymax
+	print "Graphing " + title
 
 	(subtitle, xlabels, yvalues, xlabel) = collection[0]
 
@@ -470,12 +480,13 @@ def get_json_val(json_data, fullpath):
 #
 # Do statistic data gathering
 #
-def compare_stats(html_subdirs, root_path, graph_func, stats_collection, keys, stacked_keys):
+def compare_stats(html_subdirs, root_path, graph_func, stats_collection, collection_keys):
 	#
 	# Determine which jobs were run
 	# and hence all the unique configs
 	#
 	unique_configs = []
+	keys = keys_variant_collection(stats_collection)
 
 	for stats in stats_collection:
 		for (cur, sysinfo, fio_stats) in stats:
@@ -490,7 +501,7 @@ def compare_stats(html_subdirs, root_path, graph_func, stats_collection, keys, s
 	#  interested in in labelling
 	#
 	sysinfokeys = [ 'Blocksize', 'Filesystem', 'Device', 'Hardware',
-		       	'Job', 'Date', 'Kernel-release', 'Filesize', 'Processor' ]
+		       	'Job', 'Date', 'Kernel-release', 'Filesize', 'Processor', 'IO Scheduler' ]
 
 	#
 	#  Step #1, find all the different sysinfo fields that change
@@ -539,7 +550,7 @@ def compare_stats(html_subdirs, root_path, graph_func, stats_collection, keys, s
 
 		for s in sysinfovals:
 			if len(sysinfovals[s]) > 1:
-				if not s in stacked_keys:
+				if not s in collection_keys:
 					sysinfo_fields_vary.append(s)
 			else:
 				sysinfo_fields_static.append(s)
@@ -573,7 +584,7 @@ def compare_stats(html_subdirs, root_path, graph_func, stats_collection, keys, s
 						except:
 							sysinfovals[c] = [sysinfo[c]]
 				xlabel = []
-				for f in stacked_keys:
+				for f in collection_keys:
 					xlabel.append(sysinfo[f])
 			#
 			# Add them to the subplot collection
@@ -667,27 +678,27 @@ def compare_samples(path, stats, keys, title, pattern):
 	else:
 		print "No relevant data can be found"
 
-def compare_stats_ordered_traverse(graph_func, stats, keys, order, stacked_keys, traversed_stats):
-	if (len(order) <= 1):
-		sortstats = sorted(stats, key=lambda d: d[1][order[0]])
+def compare_stats_ordered_traverse(graph_func, stats, group_by_keys, collection_keys, traversed_stats):
+	if (len(group_by_keys) <= 1):
+		sortstats = sorted(stats, key = lambda d: d[1][group_by_keys[0]])
 		traversed_stats.append(sortstats)
 		return
-
 	#
-	#  For all key values, partition into groups
+	#  For all key values, partition into "collections"
 	#  where the key value is identical and sub-divide
 	#  or graph on next key value
 	#
-	k = order[0]
-	suborder = order[1:len(order)]
+	k = group_by_keys[0]
+	suborder_by_keys = group_by_keys[1:len(group_by_keys)]
 
-	if not k in stacked_keys:
-		compare_stats_ordered_traverse(graph_func, stats, keys, suborder, stacked_keys, traversed_stats)
+	if not k in collection_keys:
+		compare_stats_ordered_traverse(graph_func, stats, suborder_by_keys, collection_keys, traversed_stats)
 	else:
 		values = []
 		for (cur, sysinfo, fio_stats) in stats:
 			if not sysinfo[k] in values:
 				values.append(sysinfo[k])
+
 		for v in values:
 			substats = []
 			for s in stats:
@@ -695,14 +706,13 @@ def compare_stats_ordered_traverse(graph_func, stats, keys, order, stacked_keys,
 				if sysinfo[k] == v:
 					substats.append(s)
 
-			compare_stats_ordered_traverse(graph_func, substats, keys, suborder, stacked_keys, traversed_stats)
+			compare_stats_ordered_traverse(graph_func, substats, suborder_by_keys, collection_keys, traversed_stats)
 
 
-def compare_stats_ordered(html_subdirs, path, graph_func, stats, keys, order, stacked_keys):
+def compare_stats_ordered(html_subdirs, path, graph_func, stats, group_by_keys, collection_keys):
 	traversed_stats = []
-	compare_stats_ordered_traverse(graph_func, stats, keys, order, stacked_keys, traversed_stats)
-	compare_stats(html_subdirs, path, graph_func, traversed_stats, keys, stacked_keys)
-
+	compare_stats_ordered_traverse(graph_func, stats, group_by_keys, collection_keys, traversed_stats)
+	compare_stats(html_subdirs, path, graph_func, traversed_stats, collection_keys)
 
 #
 #  generate a html file containing links to graphs
@@ -726,7 +736,6 @@ def generate_html(html_subdirs, root_path, sub_path, html_file, title):
 '''
 	colors = [ "#ffffff", "#e0f0ff" ]
 	i = 0
-
 	for (t, f) in sorted(html_subdirs, key=lambda d: d[0]):
 		common = os.path.commonprefix([sub_path, f])
 		relname = f[len(common)+1:]
@@ -754,33 +763,22 @@ def generate_html(html_subdirs, root_path, sub_path, html_file, title):
 #  Histogram of fs + tests on a given day
 #
 def daily_tests_histogram(html_dirs, root_path, date):
-	tests = find_matching_stats(stats, [ ('Date', [date]), ('Job', []), ('Filesystem', []), ('Kernel-release', [])])
-	keys = keys_variant(tests)
-	html_subdirs = []
-
+	tests = find_matching_stats(stats, [ ('Date', date), ('Job', []), ('Filesystem', []), ('Kernel-release', []), ('IO Scheduler', [])])
 	#
 	# Compare filesystems
 	#
-	html_subdirs = []
 	newpath = os.path.join(root_path, 'daily-fio-histograms-by-filesystem')
 	mkdirp(newpath)
-	compare_stats_ordered(html_subdirs, newpath, bar_horiz, tests, keys, ['Job', 'Filesystem', 'Date'], ['Job'])
-	html_dirs.append(generate_html(html_subdirs, root_path, newpath, 'daily-tests-histogram', 'Histograms by filesystem: ' + date))
-
-	#
-	# Compare tests
-	#
 	html_subdirs = []
-	newpath = os.path.join(root_path, 'daily-fio-histograms-by-test')
-	mkdirp(newpath)
-	compare_stats_ordered(html_subdirs, newpath, bar_horiz, tests, keys, ['Filesystem', 'Date'], ['Filesystem'])
-	html_dirs.append(generate_html(html_subdirs, root_path, newpath, 'daily-tests-histogram', 'Histograms by test: ' + date))
+	compare_stats_ordered(html_subdirs, newpath, bar_horiz, tests, ['IO Scheduler', 'Job', 'Filesystem', 'Date' ], ['Job'])
+	html_dirs.append(generate_html(html_subdirs, root_path, newpath, 'daily-tests-histogram', 'Histograms ' + ', '.join(date)))
+
 #
 #  Samples of fs on a given day
 #
 def daily_tests_samples(html_dirs, root_path, date):
 	tests = find_matching_stats(stats, [ ('Date', [date]), ('Job', []), ('Filesystem', []), ('Kernel-release', [])])
-	keys = keys_variant(tests)
+	keys = keys_variant_partitioned([tests])
 
 	#
 	#  Process raw samples from fio logs
@@ -816,8 +814,7 @@ def overtime_trends(html_dirs, root_path):
 		jobpath = os.path.join(newpath, job)
 		mkdirp(jobpath)
 		tests = find_matching_stats(stats, [ ('Date', date), ('Job', [job]), ('Filesystem', file_systems), ('Kernel-release', kernel_release )])
-		keys = keys_variant(tests)
-		compare_stats_ordered(html_subdirs, jobpath, plot_horiz, tests, keys, ['Job', 'Filesystem', 'Date'], ['Filesystem', 'Job'])
+		compare_stats_ordered(html_subdirs, jobpath, plot_horiz, tests, ['Job', 'Filesystem', 'Date'], ['Filesystem', 'Job'])
 		html_subdirs.append(generate_html([], newpath, jobpath, 'overtime-trends', job + ": " + 'trends over time'))
 
 	html_dirs.append(generate_html(html_subdirs, newpath, newpath, 'overtime-trends', 'All trends over time'))
@@ -835,9 +832,9 @@ tmpdir = "/tmp/test"
 print "results in " + tmpdir
 
 html_dirs = []
-daily_tests_histogram(html_dirs, tmpdir, '2014-06-30')
-daily_tests_samples(html_dirs, tmpdir, '2014-06-30')
-overtime_trends(html_dirs, tmpdir)
+daily_tests_histogram(html_dirs, tmpdir, [ '2014-07-01', '2014-07-02'])
+#daily_tests_samples(html_dirs, tmpdir, '2014-06-30')
+#overtime_trends(html_dirs, tmpdir)
 
 generate_html(html_dirs, tmpdir, tmpdir, 'results', 'All results')
 
