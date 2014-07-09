@@ -30,6 +30,7 @@ import re
 import gzip
 import string
 import errno
+import textwrap
 
 if len(sys.argv) < 2:
 	sys.exit('Usage: %s results-path' % sys.argv[0])
@@ -68,6 +69,12 @@ def sysinfo_load(file):
 	f.close()
 
 	return sysinfo
+
+#
+#  Text wrap
+#
+def text_wrap(text, len):
+	return '\n'.join(textwrap.wrap(text, len))
 
 job_config_cache = {}
 
@@ -153,6 +160,7 @@ def str_to_filename(str):
 def save_png(path, title, fig):
 	filename = os.path.join(path, str_to_filename(title) + ".png")
 	fig.savefig(filename, dpi=70, transparent=True)
+	print "Graphed " + filename
 	return filename
 
 #
@@ -231,6 +239,8 @@ def bar_horiz(html_subdirs, root_path, keys, config, collection):
 def plot_horiz(html_subdirs, path, keys, config, collection):
 	title = config['Label']
 	units = config['Units']
+
+	print "Graphing " + title
 
 	fig, plot = plt.subplots(figsize=(8, 6))
 
@@ -328,7 +338,7 @@ def plot_samples_by_filesystem_cols(path, keys, title, data):
 				plots[0][i].plot(x, y, '.', color='black')
 				plots[0][i].set_xlabel('Sample #')
 				plots[0][i].set_ylabel(title)
-				plots[0][i].set_title(title + '\n' + subtitle + sysinfo_keys_to_label(sysinfo, keys))
+				plots[0][i].set_title(title + '\n' + text_wrap(subtitle + sysinfo_keys_to_label(sysinfo, keys), 30))
 				plots[0][i].yaxis.grid(True, which='both')
 				plots[0][i].axes.get_xaxis().set_ticks([])
 
@@ -338,7 +348,7 @@ def plot_samples_by_filesystem_cols(path, keys, title, data):
 					plots[1,i].imshow(heatmap, extent=extent, aspect='auto', origin="lower")
 				plots[1,i].set_xlabel('Sample #')
 				plots[1,i].set_ylabel(title)
-				plots[1,i].set_title("Heatmap: " + title + '\n' + subtitle + sysinfo_keys_to_label(sysinfo, keys))
+				plots[1,i].set_title("Heatmap: " + title + '\n' + text_wrap(subtitle + sysinfo_keys_to_label(sysinfo, keys), 30))
 				plots[1][i].axes.get_xaxis().set_ticks([])
 
 			yy = sysinfo['mean_y']
@@ -777,8 +787,8 @@ def daily_tests_histogram(html_dirs, root_path, date):
 #  Samples of fs on a given day
 #
 def daily_tests_samples(html_dirs, root_path, date):
-	tests = find_matching_stats(stats, [ ('Date', [date]), ('Job', []), ('Filesystem', []), ('Kernel-release', [])])
-	keys = keys_variant_partitioned([tests])
+	tests = find_matching_stats(stats, [ ('Date', date), ('Job', []), ('Filesystem', []), ('Kernel-release', [])])
+	keys = keys_variant_collection([tests])
 
 	#
 	#  Process raw samples from fio logs
@@ -793,7 +803,7 @@ def daily_tests_samples(html_dirs, root_path, date):
 		newpath = os.path.join(root_path, g[2])
 		mkdirp(newpath)
 		compare_samples(newpath, tests, keys, g[0], g[1])
-		html_dirs.append(generate_html([], root_path, newpath, g[2], g[0] + ": " + date))
+		html_dirs.append(generate_html([], root_path, newpath, g[2], g[0] + ": " + ', '.join(date)))
 
 #
 #  Plot trends over time
@@ -832,8 +842,8 @@ tmpdir = "/tmp/test"
 print "results in " + tmpdir
 
 html_dirs = []
-daily_tests_histogram(html_dirs, tmpdir, [ '2014-07-01', '2014-07-02'])
-#daily_tests_samples(html_dirs, tmpdir, '2014-06-30')
+#daily_tests_histogram(html_dirs, tmpdir, [ '2014-07-01', '2014-07-02'])
+daily_tests_samples(html_dirs, tmpdir, ['2014-07-01', '2014-07-02'])
 #overtime_trends(html_dirs, tmpdir)
 
 generate_html(html_dirs, tmpdir, tmpdir, 'results', 'All results')
