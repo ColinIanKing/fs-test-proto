@@ -794,10 +794,10 @@ def daily_tests_samples(html_dirs, root_path, date):
 	#  Process raw samples from fio logs
 	#
 	graphs = [
-		('Bandwidth KB per sec',	'job.*_bw\.log*', 'daily-fio-stats-bandwidth'),
-		('I/O ops per sec', 'job.*_iops\.log*', 'daily-fio-stats-io-ops'),
-		('I/O Latency (us)', 'job.*_lat\.log*', 'daily-fio-stats-io-latency'),
-		('I/O Completion Latency (us) ', 'job.*_clat\.log*', 'daily-fio-stats-clatency') ]
+		('Bandwidth KB per second',	'job.*_bw\.log*', 	'daily-fio-stats-bandwidth'),
+		('I/O ops per second', 		'job.*_iops\.log*', 	'daily-fio-stats-io-ops'),
+		('I/O Latency (us)', 		'job.*_lat\.log*', 	'daily-fio-stats-io-latency'),
+		('I/O Completion Latency (us)', 'job.*_clat\.log*', 	'daily-fio-stats-clatency') ]
 
 	for g in graphs:
 		newpath = os.path.join(root_path, g[2])
