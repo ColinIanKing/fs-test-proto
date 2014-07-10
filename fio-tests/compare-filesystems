@@ -142,6 +142,8 @@ def job_config_get(job):
 		for line in f.read().splitlines():
 			if line[:1] == '#':
 				continue
+			if not "," in line:
+				continue
 			info = {}
 			fields = line.split(',', 4)
 			if ',' in line:
