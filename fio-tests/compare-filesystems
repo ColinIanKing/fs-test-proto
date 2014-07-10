@@ -513,11 +513,10 @@ def compare_stats(html_subdirs, root_path, graph_func, stats_collection, collect
 
 	#
 	#  The following are config values that we may be
-	#  interested in in labelling
+	#  interested in labelling
 	#
 	sysinfokeys = [ 'Blocksize', 'Filesystem', 'Device', 'Hardware',
 		       	'Job', 'Date', 'Kernel-release', 'Filesize', 'Processor', 'IO Scheduler' ]
-
 	#
 	#  Step #1, find all the different sysinfo fields that change
 	#  across all the collections and tests
@@ -534,18 +533,15 @@ def compare_stats(html_subdirs, root_path, graph_func, stats_collection, collect
 								sysinfovals[c].append(sysinfo[c])
 						except:
 							sysinfovals[c] = [ sysinfo[c] ]
-
 	for s in sysinfovals:
 		if len(sysinfovals[s]) > 1:
 			collection_fields_vary.append(s)
-
 	#
 	#  Step #2, gather the data
 	#
 	for config in unique_configs:
 		sysinfovals = {}
 		collection = []
-
 		#
 		#  find all the different sysinfo fields that change and don't
 		#  change across the tests
@@ -559,7 +555,6 @@ def compare_stats(html_subdirs, root_path, graph_func, stats_collection, collect
 								sysinfovals[c].append(sysinfo[c])
 						except:
 							sysinfovals[c] = [sysinfo[c]]
-
 		sysinfo_fields_vary = []
 		sysinfo_fields_static = []
 
@@ -630,7 +625,6 @@ def collect_stats(path):
 
 	return stats
 
-
 def find_matching_stats(stats, criteria):
 	matches = []
 	for (cur, sysinfo, fio_stats, samples) in stats:
@@ -689,29 +683,45 @@ def samples_load(path):
 
 	return samples
 
-def compare_samples(key, path, stats, keys, title):
-	data = []
-	titles = []
-
+def compare_samples(html_subdirs, root_path, path, key, stats, keys, title):
+	jobs = []
 	print "Processing " + key
 
+	#
+	# Find all unique jobs
+	#
 	for (cur, sysinfo, fio_stats, samples) in stats:
-		data.append((samples[key], sysinfo))
-		titles.append(sysinfo_keys_to_label(sysinfo, keys))
+		if sysinfo['Job'] not in jobs:
+			jobs.append(sysinfo['Job'])
 
-	print "titles: ", titles
 	#
-	# Sort based on the chart titles
+	# Process data from each unique job:
 	#
-	indexes = np.argsort(titles)
-	titles = [ titles[i] for i in indexes ]
-	data = [ data[i] for i in indexes ]
+	for job in jobs:
+		data = []
+		titles = []
+		for (cur, sysinfo, fio_stats, samples) in stats:
+			if sysinfo['Job'] == job:
+				data.append((samples[key], sysinfo))
+				titles.append(sysinfo_keys_to_label(sysinfo, keys))
 
-	if len(data):
-		plot_samples_by_filesystem_cols(path, keys, title, data)
-		hist_samples_by_filesystem_cols(path, keys, title, data)
-	else:
-		print "No relevant data can be found"
+		print "Job" + job + ", titles: ", titles
+		#
+		# Sort based on the chart titles
+		#
+		indexes = np.argsort(titles)
+		titles = [ titles[i] for i in indexes ]
+		data = [ data[i] for i in indexes ]
+
+		new_path = os.path.join(path, job)
+		mkdirp(new_path)
+	
+		if len(data):
+			plot_samples_by_filesystem_cols(new_path, keys, title, data)
+			#hist_samples_by_filesystem_cols(new_path, keys, title, data)
+			html_subdirs.append(generate_html([], root_path, new_path, job, job))
+		else:
+			print "No relevant data can be found"
 
 def compare_stats_ordered_traverse(graph_func, stats, group_by_keys, collection_keys, traversed_stats):
 	if (len(group_by_keys) <= 1):
@@ -762,8 +772,6 @@ def generate_html(html_subdirs, root_path, sub_path, html_file, title):
  http-equiv="content-type">
   <title>''' + title + '''</title>
   <h2><center>''' + title + '''</center></h2>'''
-
-
 	page += '''
 </head>
 <body>
@@ -776,7 +784,6 @@ def generate_html(html_subdirs, root_path, sub_path, html_file, title):
 		common = os.path.commonprefix([sub_path, f])
 		relname = f[len(common)+1:]
 		page += '\n <tr><td><center><a href="' + relname + '">' + t + '</a></center></td></tr>'
-
 	for f in sorted(os.listdir(sub_path)):
 		(filename, extension) = os.path.splitext(f)
 		if extension == ".png":
@@ -829,14 +836,15 @@ def daily_tests_samples(html_dirs, root_path, date):
 		])
 	keys = keys_variant_collection([tests])
 
+	html_subdirs = []
 	#
 	#  Process raw samples from fio logs
 	#
-	for (key, title, pattern, name) in samples_info:
-		newpath = os.path.join(root_path, name)
-		mkdirp(newpath)
-		compare_samples(key, newpath, tests, keys, title)
-		html_dirs.append(generate_html([], root_path, newpath, name, title + ": " + ', '.join(date)))
+	for (key, title, pattern, name) in [samples_info[0]]:
+		new_path = os.path.join(root_path, name)
+		mkdirp(new_path)
+		compare_samples(html_subdirs, root_path, new_path, key, tests, keys, title)
+		html_dirs.append(generate_html(html_subdirs, root_path, new_path, name, title + ": " + ', '.join(date)))
 
 #
 #  Plot trends over time
