@@ -294,13 +294,13 @@ def plot_horiz_trend(html_subdirs, path, keys, config, collection):
 				yvalues = [ yvalues[i] for i in indexes ]
 				plot.plot(xvalues, yvalues, label = xlabel)
 				plot.grid(True)
-				plot.set_xlabel(text_wrap(subtitle, 30))
+				plot.set_xlabel(text_wrap(subtitle, 40))
 				plot.set_ylabel(title + " (" + units + ")")
 				plot.set_ylim(ymin * 0.80, ymax * 1.05)
 				plot.set_xlim(0, len(all_xlabels) -1)
 
 		plt.xticks(np.arange(len(all_xlabels)), all_xlabels, rotation=90)
-		plt.title(text_wrap(title + " (" + io + ")", 30))
+		plt.title(text_wrap(title + " (" + io + ")", 40))
 		plt.legend(loc = 3, prop={'size':10})
 		plt.tight_layout()
 		save_png(path, title + "-" + io, fig)
