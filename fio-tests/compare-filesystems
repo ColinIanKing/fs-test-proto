@@ -625,13 +625,12 @@ def samples_load_by_pattern(path, pattern):
 					f = gzip.open(filename)
 				else:
 					f = open(filename, 'r')
-				for line in f.read().splitlines():
-					s = line.split(',')
-					x.append(int(s[0]))
-					y.append(int(s[1]))
-				f.close()
-				values.append((x,y))
 
+				lines = f.readlines()
+				f.close()
+				x = [ int(col.split(',')[0]) for col in lines]
+				y = [ int(col.split(',')[1]) for col in lines]
+				values.append((x,y))
 	return values
 
 #
