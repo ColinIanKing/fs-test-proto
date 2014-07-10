@@ -689,8 +689,7 @@ def samples_load(path):
 
 	return samples
 
-def compare_samples(key, path, stats, keys, title, pattern):
-	regex = re.compile(pattern)
+def compare_samples(key, path, stats, keys, title):
 	data = []
 	titles = []
 
@@ -836,7 +835,7 @@ def daily_tests_samples(html_dirs, root_path, date):
 	for (key, title, pattern, name) in samples_info:
 		newpath = os.path.join(root_path, name)
 		mkdirp(newpath)
-		compare_samples(key, newpath, tests, keys, title, pattern)
+		compare_samples(key, newpath, tests, keys, title)
 		html_dirs.append(generate_html([], root_path, newpath, name, title + ": " + ', '.join(date)))
 
 #
