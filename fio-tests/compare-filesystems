@@ -197,7 +197,7 @@ def bar_horiz(html_subdirs, root_path, keys, config, collection):
 	#  this allows us to determine how to color the bars
 	#
 	endlabels = []
-	for (subtitle, xlabels, yvalues, xlabel) in collection:
+	for (subtitle, xlabels, yvalues, xlabel, sysinfos) in collection:
 		for l in xlabels:
 			end = l.split()[::-1][0]
 			if not end in endlabels:
@@ -206,7 +206,7 @@ def bar_horiz(html_subdirs, root_path, keys, config, collection):
 
 	n = 0
 	for c in collection:
-		(subtitle, xlabels, yvalues, xlabel) = c
+		(subtitle, xlabels, yvalues, xlabel, sysinfos) = c
 		nbars = len(yvalues)
 		fig, plot = plt.subplots(1, figsize=(9, 1 + (0.35 * nbars)))
 
@@ -242,14 +242,12 @@ def bar_horiz(html_subdirs, root_path, keys, config, collection):
 	html_subdirs.append(generate_html([], root_path, newpath, filename, title))
 
 #
-#  Very simple graph plot
+#  trend line graph plot
 #
-def plot_horiz(html_subdirs, path, keys, config, collection):
+def plot_horiz_trend(html_subdirs, path, keys, config, collection):
 	title = config['Label']
 	units = config['Units']
 
-	print "Graphing " + title
-	fig, plot = plt.subplots(figsize=(8, 6))
 
 	#
 	#  Determine all the xlabels in the collection
@@ -258,37 +256,55 @@ def plot_horiz(html_subdirs, path, keys, config, collection):
 	ymax = 0
 	ymin = 1e12
 	for c in collection:
-		(subtitle, xlabels, yvalues, xlabel) = c
+		(subtitle, xlabels, yvalues, xlabel, sysinfos) = c
 		for xlabel in xlabels:
 			if not xlabel in all_xlabels:
 				all_xlabels.append(xlabel)
 		ymax = max(ymax, max(yvalues))
 		ymin = min(ymin, min(yvalues))
 
+	filesystems = []
+	ioscheds = []
 	for c in collection:
-		(subtitle, xlabels, yvalues, xlabel) = c
-		xvalues = []
-		for x in xlabels:
-			xvalues.append(all_xlabels.index(x))
-		#
-		#  And sort vales in x order (sigh)
-		#
-		indexes = np.argsort(xvalues)
-		xvalues = [ xvalues[i] for i in indexes ]
-		yvalues = [ yvalues[i] for i in indexes ]
-		plot.plot(xvalues, yvalues, label = xlabel)
-		plot.grid(True)
-		plot.set_xlabel(subtitle)
-		plot.set_ylabel(title + " (" + units + ")")
-		plot.set_ylim(ymin * 0.80, ymax * 1.05)
-		plot.set_xlim(0, len(all_xlabels) -1)
+		(subtitle, xlabels, yvalues, xlabel, sysinfos) = c
+		for sysinfo in sysinfos:
+			if not sysinfo['Filesystem'] in filesystems:
+				filesystems.append(sysinfo['Filesystem'])
+			if not sysinfo['IO Scheduler'] in ioscheds:
+				ioscheds.append(sysinfo['IO Scheduler'])
 
-	plt.xticks(np.arange(len(all_xlabels)), all_xlabels, rotation=90)
-	plt.title(title)
-	plt.legend(loc = 6, prop={'size':10})
-	plt.tight_layout()
-	save_png(path, title, fig)
-	plt.close()
+	for io in ioscheds:
+		fig, plot = plt.subplots(figsize=(8, 6))
+		for (subtitle, xlabels, yvalues, xlabel, sysinfos) in collection:
+			#
+			#  Dirty hack: since these are all broken into
+			#  collections of the same type sysinfo can
+			#  be derived from any of the systinfos in this
+			#  collection
+			#
+			if sysinfos[0]['IO Scheduler'] == io:
+				xvalues = []
+				for x in xlabels:
+					xvalues.append(all_xlabels.index(x))
+				#
+				#  And sort vales in x order (sigh)
+				#
+				indexes = np.argsort(xvalues)
+				xvalues = [ xvalues[i] for i in indexes ]
+				yvalues = [ yvalues[i] for i in indexes ]
+				plot.plot(xvalues, yvalues, label = xlabel)
+				plot.grid(True)
+				plot.set_xlabel(text_wrap(subtitle, 30))
+				plot.set_ylabel(title + " (" + units + ")")
+				plot.set_ylim(ymin * 0.80, ymax * 1.05)
+				plot.set_xlim(0, len(all_xlabels) -1)
+
+		plt.xticks(np.arange(len(all_xlabels)), all_xlabels, rotation=90)
+		plt.title(text_wrap(title + " (" + io + ")", 30))
+		plt.legend(loc = 3, prop={'size':10})
+		plt.tight_layout()
+		save_png(path, title + "-" + io, fig)
+		plt.close()
 
 #
 #  plot samples and heatmaps from raw fio data
@@ -530,6 +546,7 @@ def graph_stats(html_subdirs, root_path, graph_func, stats_collection, collectio
 		for stats in stats_collection:
 			yvalues = []
 			xlabels = []
+			sysinfos = []
 			for (cur, sysinfo, fio_stats, samples) in stats:
 				if config in job_config_get(sysinfo['Job']):
 					val = get_json_val(fio_stats, jsonpath)
@@ -539,6 +556,7 @@ def graph_stats(html_subdirs, root_path, graph_func, stats_collection, collectio
 						xlabel += sysinfo[f] + ", "
 
 					xlabels.append(clean_label(xlabel))
+					sysinfos.append(sysinfo)
 
 					for c in sysinfokeys:
 						try:
@@ -553,7 +571,7 @@ def graph_stats(html_subdirs, root_path, graph_func, stats_collection, collectio
 			# Add them to the subplot collection
 			#
 			if len(xlabels) > 0:
-				collection.append((array_to_str(subtitle), xlabels, yvalues, array_to_str(xlabel)))
+				collection.append((array_to_str(subtitle), xlabels, yvalues, array_to_str(xlabel), sysinfos))
 
 		graph_func(html_subdirs, root_path, keys, config, collection)
 
@@ -837,8 +855,8 @@ def overtime_trends(html_dirs, root_path):
 				('Filesystem', file_systems),
 				('Kernel-release', kernel_release )
 			])
-		compare_stats_ordered(html_subdirs, jobpath, plot_horiz, tests,
-			[ 'Job', 'Filesystem', 'Date'], ['Filesystem', 'Job'])
+		compare_stats_ordered(html_subdirs, jobpath, plot_horiz_trend, tests,
+			[ 'Job', 'Filesystem', 'IO Scheduler', 'Date'], ['Filesystem', 'IO Scheduler', 'Job'])
 		html_subdirs.append(generate_html([], newpath, jobpath, 'overtime-trends', job + ": " + 'trends over time'))
 
 	html_dirs.append(generate_html(html_subdirs, newpath, newpath, 'overtime-trends', 'All trends over time'))
