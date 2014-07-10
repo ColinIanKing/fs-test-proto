@@ -33,11 +33,54 @@ import errno
 import os
 import textwrap
 
+job_config_cache = {}
+
 if len(sys.argv) < 2:
 	sys.exit('Usage: %s results-path' % sys.argv[0])
 
 if not os.path.exists(sys.argv[1]):
 	sys.exit('Path %s not found' % sys.argv[1])
+
+#
+#  generate a html file containing links to graphs
+#
+def generate_html(html_subdirs, root_path, sub_path, html_file, title):
+	page = '''
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html>
+<head>
+  <meta content="text/html; charset=ISO-8859-1"
+ http-equiv="content-type">
+  <title>''' + title + '''</title>
+  <h2><center>''' + title + '''</center></h2>'''
+	page += '''
+</head>
+<body>
+<center>
+  <table width=100% cellspacing="2">
+'''
+	colors = [ "#ffffff", "#e0f0ff" ]
+	i = 0
+	for (t, f) in sorted(html_subdirs, key=lambda d: d[0]):
+		common = os.path.commonprefix([sub_path, f])
+		relname = f[len(common)+1:]
+		page += '\n    <tr><td><center><a href="' + relname + '">' + t + '</a></center></td></tr>'
+	for f in sorted(os.listdir(sub_path)):
+		(filename, extension) = os.path.splitext(f)
+		if extension == ".png":
+			page += '\n <tr><td bgcolor="' + colors[i % 2] + '"><center><img src=' + f + '></center></td></tr>'
+			i += 1
+	page += '''
+  </table>
+</center>
+</body>
+</html>'''
+	mkdirp(sub_path)
+	filename = os.path.join(sub_path, "index.html")
+	f = open(filename, 'w')
+	f.write(page)
+	f.close()
+	return (title, filename)
 
 #
 #  fio data log mappings
@@ -85,7 +128,6 @@ def sysinfo_load(file):
 def text_wrap(text, len):
 	return '\n'.join(textwrap.wrap(text, len))
 
-job_config_cache = {}
 
 #
 #  Get and cache job configuration data
@@ -176,7 +218,7 @@ def save_png(path, title, fig):
 	return filename
 
 #
-#  Very simple horizontal bar chart
+#  horizontal bar chart
 #
 def bar_horiz(html_subdirs, root_path, keys, config, collection):
 	title = config['Label']
@@ -248,30 +290,31 @@ def plot_horiz_trend(html_subdirs, path, keys, config, collection):
 	title = config['Label']
 	units = config['Units']
 
-
 	#
-	#  Determine all the xlabels in the collection
+	# Determine all the xlabels in the collection
+	# and collect up unique filesystems and ioscheds
 	#
+	filesystems = []
+	ioscheds = []
 	all_xlabels = []
 	ymax = 0
 	ymin = 1e12
-	for c in collection:
-		(subtitle, xlabels, yvalues, xlabel, sysinfos) = c
+	for (subtitle, xlabels, yvalues, xlabel, sysinfos) in collection:
 		for xlabel in xlabels:
 			if not xlabel in all_xlabels:
 				all_xlabels.append(xlabel)
+
 		ymax = max(ymax, max(yvalues))
 		ymin = min(ymin, min(yvalues))
 
-	filesystems = []
-	ioscheds = []
-	for c in collection:
-		(subtitle, xlabels, yvalues, xlabel, sysinfos) = c
 		for sysinfo in sysinfos:
 			if not sysinfo['Filesystem'] in filesystems:
 				filesystems.append(sysinfo['Filesystem'])
 			if not sysinfo['IO Scheduler'] in ioscheds:
 				ioscheds.append(sysinfo['IO Scheduler'])
+
+	new_path = os.path.join(path, str_to_filename(title))
+	mkdirp(new_path)
 
 	for io in ioscheds:
 		fig, plot = plt.subplots(figsize=(8, 6))
@@ -303,8 +346,10 @@ def plot_horiz_trend(html_subdirs, path, keys, config, collection):
 		plt.title(text_wrap(title + " (" + io + ")", 40))
 		plt.legend(loc = 3, prop={'size':10})
 		plt.tight_layout()
-		save_png(path, title + "-" + io, fig)
+		save_png(new_path, title + "-" + io, fig)
 		plt.close()
+
+	html_subdirs.append(generate_html([], path, new_path, title, title))
 
 #
 #  plot samples and heatmaps from raw fio data
@@ -664,8 +709,6 @@ def samples_load(path):
 
 def graph_samples(html_subdirs, root_path, path, key, stats, keys, title):
 	jobs = []
-	print "Processing " + key
-
 	#
 	# Find all unique jobs
 	#
@@ -739,46 +782,6 @@ def compare_stats_ordered(html_subdirs, path, graph_func, stats, group_by_keys, 
 	compare_stats_ordered_traverse(graph_func, stats, group_by_keys, collection_keys, traversed_stats)
 	graph_stats(html_subdirs, path, graph_func, traversed_stats, collection_keys)
 
-#
-#  generate a html file containing links to graphs
-#
-def generate_html(html_subdirs, root_path, sub_path, html_file, title):
-	page = '''
-<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
-<html>
-<head>
-  <meta content="text/html; charset=ISO-8859-1"
- http-equiv="content-type">
-  <title>''' + title + '''</title>
-  <h2><center>''' + title + '''</center></h2>'''
-	page += '''
-</head>
-<body>
-<center>
-  <table width=100% cellspacing="2">
-'''
-	colors = [ "#ffffff", "#e0f0ff" ]
-	i = 0
-	for (t, f) in sorted(html_subdirs, key=lambda d: d[0]):
-		common = os.path.commonprefix([sub_path, f])
-		relname = f[len(common)+1:]
-		page += '\n    <tr><td><center><a href="' + relname + '">' + t + '</a></center></td></tr>'
-	for f in sorted(os.listdir(sub_path)):
-		(filename, extension) = os.path.splitext(f)
-		if extension == ".png":
-			page += '\n <tr><td bgcolor="' + colors[i % 2] + '"><center><img src=' + f + '></center></td></tr>'
-			i += 1
-	page += '''
-  </table>
-</center>
-</body>
-</html>'''
-	mkdirp(sub_path)
-	filename = os.path.join(sub_path, "index.html")
-	f = open(filename, 'w')
-	f.write(page)
-	f.close()
-	return (title, filename)
 
 #
 #  Histogram of fs + tests on a given day
