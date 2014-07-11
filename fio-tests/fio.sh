@@ -40,8 +40,8 @@ MOUNT_OPTS=$(mount -l | grep $DEVICE |awk '{ print substr($0, index($0,$6)) }')
 #
 # No start date or time, then use date and time now
 #
-DATE_START=${DATE_START:-${DATE_NOW}
-TIME_START=${TIME_START:-${TIME_NOW}
+DATE_START=${DATE_START:-${DATE_NOW}}
+TIME_START=${TIME_START:-${TIME_NOW}}
 #
 # No filesize set, then ensure we are outside the working set
 #
