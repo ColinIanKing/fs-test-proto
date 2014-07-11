@@ -38,6 +38,11 @@ IOSCHED=$(cat /sys/block/$BASEDEV/queue/scheduler | tr ' ' '\n'| grep "\[" | sed
 MOUNT_OPTS=$(mount -l | grep $DEVICE |awk '{ print substr($0, index($0,$6)) }')
 
 #
+# No start date or time, then use date and time now
+#
+DATE_START=${DATE_START:-${DATE_NOW}
+TIME_START=${TIME_START:-${TIME_NOW}
+#
 # No filesize set, then ensure we are outside the working set
 #
 SIZE=${SIZE:-${MEM_TOTAL_DOUBLE_KB}K}
@@ -51,8 +56,10 @@ BLOCKSIZE=${BLOCKSIZE:-4K}
 #
 sys_info() {
 	echo "Full Date:     " $(date)
-	echo "Date:          " ${DATE_NOW}
-	echo "Time:          " ${TIME_NOW}
+	echo "Date:          " ${DATE_START}
+	echo "Time:          " ${TIME_START}
+	echo "Date-run:      " ${DATE_NOW}
+	echo "Time-run:      " ${TIME_NOW}
 	echo "Job:           " ${JOB}
 	echo "Scenario:      " ${SCENARIO}
 	echo "Nodename:      " $(uname -n)

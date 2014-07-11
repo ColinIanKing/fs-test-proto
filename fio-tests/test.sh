@@ -7,6 +7,8 @@ MNT=/mnt
 RUNTIME=900
 HERE=$(pwd)
 FIO=${HERE}/fio/fio
+DATE_START=$(date +%F)
+TIME_START=$(date +%H%M)
 
 mk_fio()
 {
@@ -185,7 +187,7 @@ do
 			if [ $? -eq 0 ]; then
 				echo "Job: $job, Size $sz, IOsched $IOSCHED"
 				echo ${IOSCHED} > /sys/block/$BASEDEV/queue/scheduler
-				RUNTIME=${RUNTIME} SIZE=${MIN_FILE_SIZE} DIRECTORY=$MNT ./fio.sh -$opt -j $job -F ${FIO}
+				DATE_START=${DATE_START} TIME_START=${TIME_START} RUNTIME=${RUNTIME} SIZE=${MIN_FILE_SIZE} DIRECTORY=$MNT ./fio.sh -$opt -j $job -F ${FIO}
 				umount $MNT
 			fi
 		done
