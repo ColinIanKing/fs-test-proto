@@ -127,6 +127,11 @@ fi
 
 while getopts "d:m:s:" opt; do
 	case $opt in
+	D)
+		DATE_START=$OPTARG
+		;;
+	T)	TIME_START=$OPTARG
+		;;
 	d)
 		DEV=$OPTARG
 		;;
