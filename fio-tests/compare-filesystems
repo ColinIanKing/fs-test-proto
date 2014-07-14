@@ -214,8 +214,9 @@ def str_to_filename(str):
 #  Save a png to file
 #
 def save_png(path, title, fig):
-	filename = os.path.join(path, str_to_filename(title) + ".png")
-	fig.savefig(filename, dpi=70, transparent=True)
+	filename = str_to_filename(title)
+	pathname = os.path.join(path, filename + ".png")
+	fig.savefig(pathname, dpi=70, transparent=True)
 	print "Graphed " + filename
 	return filename
 
@@ -318,6 +319,7 @@ def plot_horiz_trend(html_subdirs, path, keys, config, collection):
 	new_path = os.path.join(path, str_to_filename(title))
 	mkdirp(new_path)
 
+	all_xlabels = sorted(all_xlabels)
 	for io in ioscheds:
 		fig, plot = plt.subplots(figsize=(8, 6))
 		for (subtitle, xlabels, yvalues, xlabel, sysinfos) in collection:
@@ -331,13 +333,21 @@ def plot_horiz_trend(html_subdirs, path, keys, config, collection):
 				xvalues = []
 				for x in xlabels:
 					xvalues.append(all_xlabels.index(x))
+
 				#
 				#  And sort vales in x order (sigh)
 				#
 				indexes = np.argsort(xvalues)
+				#print "DATA:"
+				#print "  xlabels", xlabels
+				#print "  xvalues", xvalues
+				#print "  yvalues", yvalues
+				#print "  all_x..", all_xlabels
+				#print "  indexes", indexes
+				#print ""
 				xvalues = [ xvalues[i] for i in indexes ]
 				yvalues = [ yvalues[i] for i in indexes ]
-				plot.plot(xvalues, yvalues, label = xlabel)
+				plot.plot(xvalues, yvalues, '-x', label = xlabel)
 				plot.grid(True)
 				plot.set_xlabel(text_wrap(subtitle, 40))
 				plot.set_ylabel(title + " (" + units + ")")
@@ -351,7 +361,7 @@ def plot_horiz_trend(html_subdirs, path, keys, config, collection):
 		save_png(new_path, title + "-" + io, fig)
 		plt.close()
 
-	html_subdirs.append(generate_html([], path, new_path, title, title))
+	html_subdirs.append(generate_html([], new_path, new_path, title, title))
 
 #
 #  plot samples and heatmaps from raw fio data
@@ -625,14 +635,17 @@ def graph_stats(html_subdirs, root_path, graph_func, stats_collection, collectio
 #
 #  Load in fio-stats.json and sysinfo.log for the given tests
 #
-def collect_stats(path):
+def collect_stats(path, want_samples):
 	stats = []
 	for cur, _dirs, files in os.walk(path):
 		head, tail = os.path.split(cur)
 		if tail == "stats":
 			sysinfo = sysinfo_load(os.path.join(cur, 'sysinfo.log'))
 			job_config_get(sysinfo['Job'])
-			samples = samples_load(cur)
+			if want_samples:
+				samples = samples_load(cur)
+			else:
+				samples = None
 			try:
 				f = open(os.path.join(cur, 'fio-stats.json'), 'r')
 				fio_stats = json.load(f)
@@ -833,8 +846,8 @@ def daily_tests_samples(html_dirs, root_path, date):
 #  Plot trends over time
 #
 def overtime_trends(html_dirs, root_path):
-	newpath = os.path.join(root_path, 'overtime-trends')
-	mkdirp(newpath)
+	new_path = os.path.join(root_path, 'overtime-trends')
+	mkdirp(new_path)
 
 	kernel_release = []
 	file_systems = []
@@ -850,9 +863,10 @@ def overtime_trends(html_dirs, root_path):
 
 	html_subdirs = []
 	for job in jobs:
+		html_jobsubdirs = []
 		print "Generating trends for job " + job
-		jobpath = os.path.join(newpath, job)
-		mkdirp(jobpath)
+		job_path = os.path.join(new_path, job)
+		mkdirp(job_path)
 		tests = find_matching_stats(stats, 
 			[
 				('Date', date),
@@ -860,27 +874,33 @@ def overtime_trends(html_dirs, root_path):
 				('Filesystem', file_systems),
 				('Kernel-release', kernel_release )
 			])
-		compare_stats_ordered(html_subdirs, jobpath, plot_horiz_trend, tests,
+		compare_stats_ordered(html_jobsubdirs, job_path, plot_horiz_trend, tests,
 			[ 'Job', 'Filesystem', 'IO Scheduler', 'Date'], ['Filesystem', 'IO Scheduler', 'Job'])
-		html_subdirs.append(generate_html([], newpath, jobpath, 'overtime-trends', job + ": " + 'trends over time'))
+		html_subdirs.append(generate_html(html_jobsubdirs, new_path, job_path, 'overtime-trends', job + ": " + 'trends over time'))
 
-	html_dirs.append(generate_html(html_subdirs, newpath, newpath, 'overtime-trends', 'All trends over time'))
+	html_dirs.append(generate_html(html_subdirs, root_path, new_path, 'overtime-trends', 'All trends over time'))
 
 #
 #  Gather up stats
 #
+dates = [ '2014-07-10', '2014-07-11', '2014-07-12', '2014-07-13', '2014-07-14' ]
+html_dirs = []
 stats = []
+tmpdir = "/tmp/test"
+print "Results in " + tmpdir
+
+do_daily = False
 
 print "Reading data.."
 for i in range(1, len(sys.argv)):
-	stats += collect_stats(sys.argv[i])
+	stats += collect_stats(sys.argv[i], do_daily)
 
-tmpdir = "/tmp/test"
-print "results in " + tmpdir
+mkdirp(tmpdir)
 
-html_dirs = []
-daily_tests_histogram(html_dirs, tmpdir, [ '2014-07-01', '2014-07-02'])
-daily_tests_samples(html_dirs, tmpdir, ['2014-07-01', '2014-07-02'])
-overtime_trends(html_dirs, tmpdir)
+if do_daily:
+	daily_tests_histogram(html_dirs, tmpdir, dates)
+	daily_tests_samples(html_dirs, tmpdir, dates)
+else:
+	overtime_trends(html_dirs, tmpdir)
 
 generate_html(html_dirs, tmpdir, tmpdir, 'results', 'All results')
