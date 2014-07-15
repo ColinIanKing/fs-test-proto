@@ -44,11 +44,12 @@ if not os.path.exists(sys.argv[1]):
 #
 #  generate a html file containing links to graphs
 #
-def generate_html(html_subdirs, root_path, sub_path, html_file, title):
+def generate_html(html_subdirs, html, root_path, sub_path, html_file, title):
 	page = '''
 <!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
 <html>
 <head>
+  <script type="text/javascript" src="https://www.google.com/jsapi"></script>
   <meta content="text/html; charset=ISO-8859-1"
  http-equiv="content-type">
   <title>''' + title + '''</title>
@@ -65,6 +66,8 @@ def generate_html(html_subdirs, root_path, sub_path, html_file, title):
 		common = os.path.commonprefix([sub_path, f])
 		relname = f[len(common)+1:]
 		page += '\n    <tr><td><center><a href="' + relname + '">' + t + '</a></center></td></tr>'
+	page += html
+
 	for f in sorted(os.listdir(sub_path)):
 		(filename, extension) = os.path.splitext(f)
 		if extension == ".png":
@@ -247,44 +250,54 @@ def bar_horiz(html_subdirs, root_path, keys, config, collection):
 			end = l.split()[::-1][0]
 			if not end in endlabels:
 				endlabels.append(end)
-	colors ='rgbwmcrgbwnc'[0:len(endlabels)]
 
+	colors = [ '#f37320', '#f7995b', '#fabb8d' ]
+
+	html = ""
 	n = 0
 	for c in collection:
 		(subtitle, xlabels, yvalues, xlabel, sysinfos) = c
-		nbars = len(yvalues)
-		fig, plot = plt.subplots(1, figsize=(9, 1 + (0.35 * nbars)))
-
 		xvalues = []
 		for x in xlabels:
 			xvalues.append(xlabels.index(x))
-
-		ymin = 0 # min(yvalues)
-		ymax = max(yvalues)
-		if ymax - ymin == 0:
-			ymax = 1
 		#
 		#  And sort values in x order (sigh)
 		#
 		indexes = np.argsort(xlabels)[::-1]
-		xlabels = [ xlabels[i] for i in indexes ]
-		yvalues = [ yvalues[i] for i in indexes ]
-		pos = np.arange(len(xlabels)) + 0.5
 
-		plot.set_xlim(ymin, ymax)
-		plot.set_ylim(0, len(xlabels))
-		plot.xaxis.grid(True, which='both')
-		plot.yaxis.grid(True, which='both')
-		plot.barh(pos, yvalues, align='center', color=colors)
-		plt.title(xlabel + ": " + title + " (" + units + ")" + "\n" + subtitle)
+		html += '''
+	<script type="text/javascript">
+	google.load("visualization", "1", {packages:["corechart"]});
+	google.setOnLoadCallback(drawChart);
+	function drawChart() {
+        var data = google.visualization.arrayToDataTable([
+	'''
+		html += "['Filesytem', '" + title + " (" + units + ")'," + \
+			" { role: 'style' }],\n"
 
-		plt.yticks(pos, xlabels)
-		plt.tight_layout()
-		save_png(newpath, title + "-%3.3d" % n, fig)
-		plt.close()
-		n += 1
+		for i in indexes:	
+			end = xlabels[i].split()[::-1][0]
+			print xlabels[i], end
+			html += "['" + xlabels[i] + "', " + str(yvalues[i]) + "," + \
+			"'fill-color: " + colors[endlabels.index(end)] + "; " + \
+			"fill-opacity: 0.9'],\n"
 
-	html_subdirs.append(generate_html([], root_path, newpath, filename, title))
+		html += "]);\n"
+		html += '''
+        var options = {
+          title: ' ''' + xlabel + ": " + title + " (" + units + ") " + subtitle + ''' ',
+          vAxis: {title: 'Configuration' },
+          hAxis: {title: ' ''' + title + " (" + units + ")" + ''' ', minValue: 0 },
+	  legend: {position: 'none' }
+        };
+
+        var chart = new google.visualization.BarChart(document.getElementById('chart_div'));
+        chart.draw(data, options);
+      }
+	</script>
+	<div id="chart_div" style="width: 900px; height: 500px;"></div>'''
+
+	html_subdirs.append(generate_html([], html, root_path, newpath, filename, title))
 
 #
 #  trend line graph plot
@@ -361,7 +374,7 @@ def plot_horiz_trend(html_subdirs, path, keys, config, collection):
 		save_png(new_path, title + "-" + io, fig)
 		plt.close()
 
-	html_subdirs.append(generate_html([], new_path, new_path, title, title))
+	html_subdirs.append(generate_html([], "", new_path, new_path, title, title))
 
 #
 #  plot samples and heatmaps from raw fio data
@@ -753,7 +766,7 @@ def graph_samples(html_subdirs, root_path, path, key, stats, keys, title):
 		if len(data):
 			plot_samples_raw_fio_data(new_path, keys, title, data)
 			hist_samples_raw_fio_data(new_path, keys, title, data)
-			html_subdirs.append(generate_html([], root_path, new_path, job, job))
+			html_subdirs.append(generate_html([], "", root_path, new_path, job, job))
 		else:
 			print "No relevant data can be found"
 
@@ -818,7 +831,7 @@ def daily_tests_histogram(html_dirs, root_path, date):
 	html_subdirs = []
 	compare_stats_ordered(html_subdirs, newpath, bar_horiz, tests,
 		['IO Scheduler', 'Job', 'Filesystem', 'Date' ], ['Job'])
-	html_dirs.append(generate_html(html_subdirs, root_path, newpath, 'daily-tests-histogram', 'Fio Test Metrics (by metric) ' + ', '.join(date)))
+	html_dirs.append(generate_html(html_subdirs, "", root_path, newpath, 'daily-tests-histogram', 'Fio Test Metrics (by metric) ' + ', '.join(date)))
 
 #
 #  Samples of fs on a given day
@@ -840,7 +853,7 @@ def daily_tests_samples(html_dirs, root_path, date):
 		mkdirp(new_path)
 		html_subdirs = []
 		graph_samples(html_subdirs, root_path, new_path, key, tests, keys, title)
-		html_dirs.append(generate_html(html_subdirs, root_path, new_path, name, title + ": " + ', '.join(date)))
+		html_dirs.append(generate_html(html_subdirs, "", root_path, new_path, name, title + ": " + ', '.join(date)))
 
 #
 #  Plot trends over time
@@ -876,20 +889,20 @@ def overtime_trends(html_dirs, root_path):
 			])
 		compare_stats_ordered(html_jobsubdirs, job_path, plot_horiz_trend, tests,
 			[ 'Job', 'Filesystem', 'IO Scheduler', 'Date'], ['Filesystem', 'IO Scheduler', 'Job'])
-		html_subdirs.append(generate_html(html_jobsubdirs, new_path, job_path, 'overtime-trends', job + ": " + 'trends over time'))
+		html_subdirs.append(generate_html(html_jobsubdirs, "", new_path, job_path, 'overtime-trends', job + ": " + 'trends over time'))
 
-	html_dirs.append(generate_html(html_subdirs, root_path, new_path, 'overtime-trends', 'All trends over time'))
+	html_dirs.append(generate_html(html_subdirs, "", root_path, new_path, 'overtime-trends', 'All trends over time'))
 
 #
 #  Gather up stats
 #
-dates = [ '2014-07-10', '2014-07-11', '2014-07-12', '2014-07-13', '2014-07-14' ]
+dates = [ '2014-07-14' ]
 html_dirs = []
 stats = []
 tmpdir = "/tmp/test"
 print "Results in " + tmpdir
 
-do_daily = False
+do_daily = True
 
 print "Reading data.."
 for i in range(1, len(sys.argv)):
@@ -898,9 +911,9 @@ for i in range(1, len(sys.argv)):
 mkdirp(tmpdir)
 
 if do_daily:
-	daily_tests_histogram(html_dirs, tmpdir, dates)
+	#daily_tests_histogram(html_dirs, tmpdir, dates)
 	daily_tests_samples(html_dirs, tmpdir, dates)
 else:
 	overtime_trends(html_dirs, tmpdir)
 
-generate_html(html_dirs, tmpdir, tmpdir, 'results', 'All results')
+generate_html(html_dirs, "", tmpdir, tmpdir, 'results', 'All results')
