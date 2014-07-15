@@ -33,6 +33,8 @@ import errno
 import os
 import textwrap
 
+ubuntu_colors = [ '#f37320', '#f7995b', '#fabb8d' ]
+
 job_config_cache = {}
 
 if len(sys.argv) < 2:
@@ -251,7 +253,6 @@ def bar_horiz(html_subdirs, root_path, keys, config, collection):
 			if not end in endlabels:
 				endlabels.append(end)
 
-	colors = [ '#f37320', '#f7995b', '#fabb8d' ]
 
 	html = ""
 	n = 0
@@ -277,9 +278,8 @@ def bar_horiz(html_subdirs, root_path, keys, config, collection):
 
 		for i in indexes:	
 			end = xlabels[i].split()[::-1][0]
-			print xlabels[i], end
 			html += "['" + xlabels[i] + "', " + str(yvalues[i]) + "," + \
-			"'fill-color: " + colors[endlabels.index(end)] + "; " + \
+			"'fill-color: " + ubuntu_colors[endlabels.index(end)] + "; " + \
 			"fill-opacity: 0.9'],\n"
 
 		html += "]);\n"
@@ -331,50 +331,57 @@ def plot_horiz_trend(html_subdirs, path, keys, config, collection):
 
 	new_path = os.path.join(path, str_to_filename(title))
 	mkdirp(new_path)
-
 	all_xlabels = sorted(all_xlabels)
+
+	chart = 0
+	html = ""
+
 	for io in ioscheds:
-		fig, plot = plt.subplots(figsize=(8, 6))
-		for (subtitle, xlabels, yvalues, xlabel, sysinfos) in collection:
-			#
-			#  Dirty hack: since these are all broken into
-			#  collections of the same type sysinfo can
-			#  be derived from any of the systinfos in this
-			#  collection
-			#
-			if sysinfos[0]['IO Scheduler'] == io:
-				xvalues = []
-				for x in xlabels:
-					xvalues.append(all_xlabels.index(x))
+		html += '''
+	<script type="text/javascript">
+	google.load("visualization", "1", {packages:["corechart"]});
+	google.setOnLoadCallback(drawChart);
+	function drawChart() {
+        var data = google.visualization.arrayToDataTable([
+	'''
+		html += "['Run #' "
+		for fs in filesystems:
+			html += ", '" + fs + "'"
+		html += "],\n"
 
-				#
-				#  And sort vales in x order (sigh)
-				#
-				indexes = np.argsort(xvalues)
-				#print "DATA:"
-				#print "  xlabels", xlabels
-				#print "  xvalues", xvalues
-				#print "  yvalues", yvalues
-				#print "  all_x..", all_xlabels
-				#print "  indexes", indexes
-				#print ""
-				xvalues = [ xvalues[i] for i in indexes ]
-				yvalues = [ yvalues[i] for i in indexes ]
-				plot.plot(xvalues, yvalues, '-x', label = xlabel)
-				plot.grid(True)
-				plot.set_xlabel(text_wrap(subtitle, 40))
-				plot.set_ylabel(title + " (" + units + ")")
-				plot.set_ylim(ymin * 0.80, ymax * 1.05)
-				plot.set_xlim(0, len(all_xlabels) -1)
+		for xl in all_xlabels:
+			html += "[ '" + xl + "' "
+			values = {}
+			for fs in filesystems:
+				values = " null "
+				for (subtitle, xlabels, yvalues, xlabel, sysinfos) in collection:
+					sysinfo = sysinfos[0]
+					if sysinfo['Filesystem'] == fs and \
+					   sysinfo['IO Scheduler'] == io and \
+					   xl in xlabels:
+						index = xlabels.index(xl)
+						values = str(yvalues[index])
+				html += "," + values
+			html += "],\n"
 
-		plt.xticks(np.arange(len(all_xlabels)), all_xlabels, rotation=90)
-		plt.title(text_wrap(title + " (" + io + ")", 40))
-		plt.legend(loc = 3, prop={'size':10})
-		plt.tight_layout()
-		save_png(new_path, title + "-" + io, fig)
-		plt.close()
+		html += "]);\n"
+		html += '''
+        var options = {
+          title: ' ''' + io + ": " + title + " (" + units + ") " + subtitle + ''' ',
+          hAxis: {title: 'Run #' },
+          vAxis: {title: ' ''' + title + " (" + units + ")" + ''' ', minValue: 0  },
+	  interpolateNulls: true,
+	  pointShape: 'diamond',
+	  pointSize: 4
+        };
 
-	html_subdirs.append(generate_html([], "", new_path, new_path, title, title))
+        var chart = new google.visualization.AreaChart(document.getElementById(''' + "'chart_div_" + io + "'" + '''));
+        chart.draw(data, options);
+      }
+	</script>
+	<div id="chart_div_''' + io + '''" style="width: 900px; height: 500px;"></div>'''
+
+	html_subdirs.append(generate_html([], html, new_path, new_path, title, title))
 
 #
 #  plot samples and heatmaps from raw fio data
@@ -902,7 +909,7 @@ stats = []
 tmpdir = "/tmp/test"
 print "Results in " + tmpdir
 
-do_daily = True
+do_daily = False
 
 print "Reading data.."
 for i in range(1, len(sys.argv)):
@@ -911,7 +918,7 @@ for i in range(1, len(sys.argv)):
 mkdirp(tmpdir)
 
 if do_daily:
-	#daily_tests_histogram(html_dirs, tmpdir, dates)
+	daily_tests_histogram(html_dirs, tmpdir, dates)
 	daily_tests_samples(html_dirs, tmpdir, dates)
 else:
 	overtime_trends(html_dirs, tmpdir)
