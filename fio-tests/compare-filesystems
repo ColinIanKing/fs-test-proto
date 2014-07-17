@@ -30,8 +30,8 @@ import re
 import gzip
 import string
 import errno
-import os
 import textwrap
+import operator
 
 ubuntu_colors = [ '#f37320', '#f7995b', '#fabb8d' ]
 
@@ -164,7 +164,7 @@ def job_config_get(job):
 #  Variants of keys?
 #
 def keys_variant_collection(part_stats):
-	skipkeys = [ 'Time', 'Kernel-version', 'Full Date']
+	skipkeys = [ 'Time-run','Time', 'Kernel-version', 'Full Date']
 	keys = []
 	for stats in part_stats:
 		for (cur, sysinfo1, fio_stats, samples) in stats:
@@ -276,7 +276,7 @@ def bar_horiz(html_subdirs, root_path, keys, config, collection):
 		html += "['Filesytem', '" + title + " (" + units + ")'," + \
 			" { role: 'style' }],\n"
 
-		for i in indexes:	
+		for i in indexes:
 			end = xlabels[i].split()[::-1][0]
 			html += "['" + xlabels[i] + "', " + str(yvalues[i]) + "," + \
 			"'fill-color: " + ubuntu_colors[endlabels.index(end)] + "; " + \
@@ -383,88 +383,186 @@ def plot_horiz_trend(html_subdirs, path, keys, config, collection):
 
 	html_subdirs.append(generate_html([], html, new_path, new_path, title, title))
 
+def heatmap_colors(heatmap):
+	max_val = 0
+	for datarow in heatmap:
+		max_val = max(max_val, max(datarow))
+
+	max_val += 1
+	red = float(255)
+	green = float(0)
+	step = 2 * (float(255) / max_val)
+	colors = []
+
+	while green < 255:
+		green += step
+		green = min(green, 255)
+		color = (65536 * int(red)) + (256 * int(green))
+		colors.append(format(color, '06x'))
+
+	while red > 0:
+		red -= step
+		red = max(red, 0)
+		color = (65536 * int(red)) + (256 * int(green))
+		colors.append(format(color, '06x'))
+
+	return colors[::-1]
+
+
 #
 #  plot samples and heatmaps from raw fio data
 #
-def plot_samples_raw_fio_data(path, keys, title, data):
+def plot_samples_raw_fio_data(root_path, keys, title, data):
 	title_keys = ['Job', 'Filesystem', 'Kernel-release']
-	cols = []
+
+	html = ""
+	chart = 0
+	filesystems = []
+	ioscheds = []
+
 	for (values, sysinfo) in data:
-		if not sysinfo['Filesystem'] in cols:
-			cols.append(sysinfo['Filesystem'])
+		if not sysinfo['Filesystem'] in filesystems:
+			filesystems.append(sysinfo['Filesystem'])
+		if not sysinfo['IO Scheduler'] in ioscheds:
+			ioscheds.append(sysinfo['IO Scheduler'])
 
-	nplots = len(data)
-	ncols = len(cols)
-	nrows = nplots / ncols
-	max_y = 0
-	#
-	#  Calculate some simple stats
-	#
-	for (values, sysinfo) in data:
-		total_y = 0
-		total_n = 0
-		for (x, y) in values:
-			if len(y) > 0:
-				max_y = max(max_y, max(y))
-				total_y += sum(y)
-				total_n += len(y)
-		if total_n == 0:
-			sysinfo['mean_y'] = 0
-		else:
-			sysinfo['mean_y'] = float(total_y) / total_n
+	for fs in sorted(filesystems):
+		for io in sorted(ioscheds):
+			for (values, sysinfo) in data:
+				subtitle = ""
+				for k in title_keys:
+					if not k in keys:
+						subtitle += sysinfo[k] + ", "
 
-	subtitle = ""
-	for k in title_keys:
-		if not k in keys:
-			subtitle += sysinfo[k] + ", "
-
-	for j in range(0, nrows):
-		fig, plots = plt.subplots(nrows=2, ncols=ncols, figsize=(5 * ncols, 6))
-		for i in range(0, ncols):
-			index = (i * nrows) + j
-			(values, sysinfo) = data[index]
-
-			for (x, y) in values:
-				if len(x) > 0:
-					max_x = max(x)
-				else:
+				if sysinfo['Filesystem'] == fs and sysinfo['IO Scheduler'] == io:
 					max_x = 0
-				if len(y) > 0:
-					max_y = max(y)
-				else:
 					max_y = 0
+					all_x = []
+					all_y = []
+					#
+					#  Data is bundled in 1 or more sets of results
+					#  For scatter plot and heatmap we can combine
+					#  it all into one big hunk of data
+					#
+					for (x, y) in values:
+						all_x += x
+						all_y += y
 
-				plots[0][i].plot(x, y, '.', color='black')
-				plots[0][i].set_xlabel('Sample #')
-				plots[0][i].set_ylabel(title)
-				plots[0][i].set_title(title + '\n' + text_wrap(subtitle + sysinfo_keys_to_label(sysinfo, keys), 30))
-				plots[0][i].yaxis.grid(True, which='both')
-				plots[0][i].axes.get_xaxis().set_ticks([])
+					max_y = max(all_y)
+					max_x = max(all_x)
 
-				if max_x > 0 and max_y > 0:
-					heatmap, yedges, xedges = np.histogram2d(y, x, bins=(16,32))
-					extent = [xedges[0], xedges[-1], yedges[0], yedges[-1]]
-					plots[1,i].imshow(heatmap, extent=extent, aspect='auto', origin="lower")
-				plots[1,i].set_xlabel('Sample #')
-				plots[1,i].set_ylabel(title)
-				plots[1,i].set_title("Heatmap: " + title + '\n' + text_wrap(subtitle + sysinfo_keys_to_label(sysinfo, keys), 30))
-				plots[1][i].axes.get_xaxis().set_ticks([])
+					rows=32
+					cols=64
+					tick_interval = 5
+					heatmap, yedges, xedges = np.histogram2d(all_y, all_x, bins=(rows,cols))
 
-			yy = sysinfo['mean_y']
-			fs = sysinfo['Filesystem']
+					rows_delta = float(max_y) / float(tick_interval - 1)
+					cols_delta = float(max_x) / float(tick_interval)
+					heatmap_vticks = []
+					for k in range(0, tick_interval + 1):
+						heatmap_vticks.append("{v:" + str(k * float(rows)/tick_interval) + ", f:'" + str(k * float(max_y)/tick_interval) + "'}")
+					heatmap_hticks = []
+					for k in range(0, tick_interval + 1):
+						heatmap_hticks.append("{v:" + str(k * float(cols)/tick_interval) + ", f:'" + str(k * float(max_x)/tick_interval) + "'}")
+					vticks = []
+					for k in range(0, tick_interval + 1):
+						vticks.append("{v:" + str(k * float(max_y)/tick_interval) + ", f:'" + str(k * float(max_y)/tick_interval) + "'}")
+					hticks = []
+					for k in range(0, tick_interval + 1):
+						hticks.append("{v:" + str(k * float(max_x)/tick_interval) + ", f:'" + str(k * float(max_x)/tick_interval) + "'}")
 
-			#
-			#  Drawn "mean" line
-			#
-			x = [0, max_x ]
-			y = [yy, yy]
-			plots[0][i].plot(x, y, label='Mean ' + '%.4f' % yy, color='red')
-			plots[0][i].legend(loc = 1, prop={'size':10})
+					n = len(all_x)
+					if n > 10000:
+						skip = n / 1000
+						all_x = all_x[::skip]
+						all_y = all_y[::skip]
 
-		plt.tight_layout()
-		save_png(path, title + '-2-graphs-%3.3d' % j, fig)
-		plt.close()
-	return
+					html += '''
+<html>
+  <head>
+    <script type="text/javascript" src="http://www.google.com/jsapi"></script>
+    <script type="text/javascript">
+      google.load("visualization", "1", {});
+      google.load("prototype", "1.6");
+    </script>
+    <script type="text/javascript">
+      google.load("visualization", "1", {packages:["corechart"]});
+      google.setOnLoadCallback(drawChart);
+      function drawChart() {
+        var data = google.visualization.arrayToDataTable([
+['Sample #','Bandwidth'],
+'''
+					for k in range(0,len(all_x)):
+						html += "[" + str(all_x[k]) + "," + str(all_y[k]) + "],\n"
+					html += '''
+	]);
+
+        var options = {
+          title: ''' + "'" + subtitle + sysinfo_keys_to_label(sysinfo, keys) + "'" + ''',
+          legend: 'none',
+          pointSize: 0.1,
+	  width: 500,
+	  height: 300,
+	  hAxis: { ticks:[''' + ','.join(hticks) + '''], title:'Sample #' },
+	  vAxis: { ticks:[''' + ','.join(vticks) + '''], title:''' "'" + title + "'" +''' },
+        };
+
+        var chart = new google.visualization.ScatterChart(document.getElementById(''' + \
+		"'chart_div_scatter_" + str(chart) + "'" + '''));
+
+        chart.draw(data, options);
+      }
+    </script>
+    <script type="text/javascript">
+      google.load("visualization", "1", {packages:["corechart"]});
+      google.setOnLoadCallback(drawChart);
+      function drawChart() {
+        var data = google.visualization.arrayToDataTable([
+['Sample #','Bandwidth', { role: 'style'}],
+'''
+					colors = heatmap_colors(heatmap)
+					row=0
+					for datarow in heatmap:
+						col = 0
+						for d in datarow:
+							html += "[" + str(col + 0.5)  + "," + str(row + 0.5) + ", 'color:#" + colors[int(d)] + "'],\n"
+							col += 1
+						row += 1
+
+					html += '''
+	]);
+
+        var options = {
+          title: ''' + "'" + subtitle + sysinfo_keys_to_label(sysinfo, keys) + "'" + ''',
+	  pointShape: 'square',
+	  pointSize: 6,
+          legend: 'none',
+	  hAxis: { ticks:[''' + ','.join(heatmap_hticks) + '''], title:'Sample #' },
+	  vAxis: { ticks:[''' + ','.join(heatmap_vticks) + '''], title:''' "'" + title + "'" +''' },
+	  width: 500,
+	  height: 300,
+	  tooltip: { trigger: 'none' }
+        };
+
+        var chart = new google.visualization.ScatterChart(document.getElementById(''' + \
+		"'chart_div_heatmap_" + str(chart) + "'" + '''));
+        chart.draw(data, options);
+      }
+    </script>
+    <table>
+    <tr>
+      <td>
+        <div id="chart_div_scatter_''' + str(chart) + '''"></div>
+      </td>
+      <td>
+        <div id="chart_div_heatmap_''' + str(chart) + '''"></div>
+      </td>
+    <tr>
+    </table>
+'''
+					chart += 1
+
+	return html
 
 def hist_samples_raw_fio_data(path, keys, title, data):
 	title_keys = ['Job', 'Filesystem', 'Kernel-release']
@@ -500,7 +598,7 @@ def hist_samples_raw_fio_data(path, keys, title, data):
 					for (x, y) in values:
 						total_y += sum(y)
 						total_n += len(y)
-	
+
 					if total_n != 0:
 						mean_y.append(float(total_y) / total_n)
 					else:
@@ -753,7 +851,8 @@ def graph_samples(html_subdirs, root_path, path, key, stats, keys, title):
 	#
 	# Process data from each unique job:
 	#
-	for job in jobs:
+	html = ""
+	for job in jobs[0:1]:
 		data = []
 		titles = []
 		for (cur, sysinfo, fio_stats, samples) in stats:
@@ -771,11 +870,13 @@ def graph_samples(html_subdirs, root_path, path, key, stats, keys, title):
 		mkdirp(new_path)
 
 		if len(data):
-			plot_samples_raw_fio_data(new_path, keys, title, data)
-			hist_samples_raw_fio_data(new_path, keys, title, data)
-			html_subdirs.append(generate_html([], "", root_path, new_path, job, job))
+			html = plot_samples_raw_fio_data(new_path, keys, title, data)
+			#hist_samples_raw_fio_data(new_path, keys, title, data)
+			html_subdirs.append(generate_html([], html, root_path, new_path, job, job))
 		else:
 			print "No relevant data can be found"
+
+	return html
 
 #
 #  break stats into collections based on the group_by_keys
@@ -909,7 +1010,7 @@ stats = []
 tmpdir = "/tmp/test"
 print "Results in " + tmpdir
 
-do_daily = False
+do_daily = True
 
 print "Reading data.."
 for i in range(1, len(sys.argv)):
@@ -918,7 +1019,7 @@ for i in range(1, len(sys.argv)):
 mkdirp(tmpdir)
 
 if do_daily:
-	daily_tests_histogram(html_dirs, tmpdir, dates)
+	#daily_tests_histogram(html_dirs, tmpdir, dates)
 	daily_tests_samples(html_dirs, tmpdir, dates)
 else:
 	overtime_trends(html_dirs, tmpdir)
