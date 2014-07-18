@@ -655,7 +655,7 @@ def graph_stats(html_subdirs, root_path, graph_func, stats_collection, collectio
 	#  interested in labelling
 	#
 	sysinfokeys = [ 'Blocksize', 'Filesystem', 'Device', 'Hardware',
-		       	'Job', 'Date', 'Kernel-release', 'Filesize', 'Processor', 'IO Scheduler' ]
+		       	'Job', 'Kernel-release', 'Date', 'Filesize', 'Processor', 'IO Scheduler' ]
 	#
 	#   gather the data
 	#
@@ -683,6 +683,12 @@ def graph_stats(html_subdirs, root_path, graph_func, stats_collection, collectio
 					sysinfo_fields_vary.append(s)
 			else:
 				sysinfo_fields_static.append(s)
+
+		#
+		# And sort them in sysinfokey order
+		#
+		sysinfo_fields_vary = sorted(sysinfo_fields_vary, key = lambda x:sysinfokeys.index(x))
+		sysinfo_fields_static = sorted(sysinfo_fields_static, key = lambda x:sysinfokeys.index(x))
 
 		label = config['Label']
 		units = config['Units']
@@ -961,7 +967,7 @@ def overtime_trends(html_dirs, root_path):
 				('Kernel-release', kernel_release )
 			])
 		compare_stats_ordered(html_jobsubdirs, job_path, plot_horiz_trend, tests,
-			[ 'Job', 'Filesystem', 'IO Scheduler', 'Date'], ['Filesystem', 'IO Scheduler', 'Job'])
+			[ 'Job', 'Filesystem', 'IO Scheduler', 'Kernel-release'], ['Filesystem', 'IO Scheduler', 'Job'])
 		html_subdirs.append(generate_html(html_jobsubdirs, "", new_path, job_path, 'overtime-trends', job + ": " + 'trends over time'))
 
 	html_dirs.append(generate_html(html_subdirs, "", root_path, new_path, 'overtime-trends', 'All trends over time'))
@@ -969,7 +975,7 @@ def overtime_trends(html_dirs, root_path):
 #
 #  Gather up stats
 #
-dates = [ ]
+dates = ['2014-07-16' ]
 html_dirs = []
 stats = []
 tmpdir = "/tmp/test"
@@ -982,7 +988,7 @@ for i in range(1, len(sys.argv)):
 mkdirp(tmpdir)
 
 daily_tests_histogram(html_dirs, tmpdir, dates)
-daily_tests_samples(html_dirs, tmpdir, dates)
-overtime_trends(html_dirs, tmpdir)
+#daily_tests_samples(html_dirs, tmpdir, dates)
+#overtime_trends(html_dirs, tmpdir)
 
 generate_html(html_dirs, "", tmpdir, tmpdir, 'results', 'All results')
