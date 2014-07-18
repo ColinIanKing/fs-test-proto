@@ -27,7 +27,6 @@ import re
 import gzip
 import string
 import errno
-import textwrap
 import operator
 
 #default_colors = [ '#f37320', '#f7995b', '#fabb8d' ]
