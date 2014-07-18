@@ -34,7 +34,7 @@ default_colors = [ '#ff0000', '#00ff00', '#0000ff' ]
 # Default graph sizes in pixels
 #
 default_width = 1000
-default_height = 500
+default_height = 350
 default_max_plots_in_scatter_plot = 1500
 
 job_config_cache = {}
@@ -271,7 +271,7 @@ def bar_horiz(html_subdirs, root_path, keys, config, collection):
         chart.draw(data, options);
       }
 	</script>
-	<div id="chart_div" style="width: ''' + str(default_width) + '''px; height: ''' + str(default_width) + '''px;"></div>'''
+	<div id="chart_div" style="width: ''' + str(default_width) + '''px; height: ''' + str(default_height) + '''px;"></div>'''
 
 	html_subdirs.append(generate_html([], html, root_path, newpath, filename, title))
 
@@ -428,11 +428,6 @@ def plot_samples_raw_fio_data(root_path, key, keys, title, sysinfos):
 					vticks.append(io + ' ' + fs)
 
 	nbars = len(vticks)
-	#
-	# normally fit in ~9 bars + some extra 1 bars slack for headings etc
-	#
-	new_height = (nbars + 1) * (default_height / 10)
-
 	html += '''
 	<script type="text/javascript">
 	google.load("visualization", "1", {packages:["corechart"]});
@@ -463,7 +458,7 @@ def plot_samples_raw_fio_data(root_path, key, keys, title, sysinfos):
         chart.draw(data, options);
       }
 	</script>
-	<div id="chart_div_hist" style="width: ''' + str(default_width) + '''px; height: ''' + str(new_height) + '''px;"></div>'''
+	<div id="chart_div_hist" style="width: ''' + str(default_width) + '''px; height: ''' + str(default_height) + '''px;"></div>'''
 
 	#
 	# Now do scatter plot and heat maps
@@ -738,7 +733,7 @@ def collect_stats(path):
 	stats = []
 	for datapath, _dirs, files in os.walk(path):
 		head, tail = os.path.split(datapath)
-		if tail == "stats":
+		if tail in [ 'stats', 'perf']:
 			sysinfo = sysinfo_load(os.path.join(datapath, 'sysinfo.log'))
 			job_config_get(sysinfo['Job'])
 
