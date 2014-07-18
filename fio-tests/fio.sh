@@ -1,8 +1,5 @@
 #!/bin/bash
 
-SVG_FLAMEGRAPH_FILE=flamegraph.svg
-SVG_HEATMAP_FILE=heatmap.svg
-SVG_WIDTH=2048
 MEM_TOTAL_KB=$(grep MemTotal /proc/meminfo | awk {'print $2}')
 MEM_TOTAL_DOUBLE_KB=$((MEM_TOTAL_KB * 2))
 DATE_NOW=$(date +%F)
@@ -13,7 +10,7 @@ FIO=fio
 
 TMP=/tmp
 
-PERF_FREQ=10000
+PERF_FREQ=1000
 RESULTS=results
 ROOT_PATH=$(pwd)
 
@@ -101,59 +98,13 @@ log_job_info()
 
 stats()
 {
-	$FIO $* ${ROOT_PATH}/jobs/${JOB} --output-format=json --output=${RESULTS_PATH}/fio-stats.json
-	#echo "Generating plots.."
-	#fio_generate_plots ${JOB} >& /dev/null
+	if [ ${SCENARIO} == "perf" ]; then
+		perf record -F ${PERF_FREQ} -g -- ${ROOT_PATH}/perf-wrapper.sh -e BLOCKSIZE=${BLOCKSIZE} -e SIZE=${SIZE} -e DIRECTORY=${DIRECTORY} $FIO $* ${ROOT_PATH}/jobs/${JOB} --output-format=json --output=${RESULTS_PATH}/fio-stats.json
+	else
+		$FIO $* ${ROOT_PATH}/jobs/${JOB} --output-format=json --output=${RESULTS_PATH}/fio-stats.json
+	fi
 }
 
-heatmap()
-{
-	LATENCY_US=$TMP/out-lat.$$
-
-	if [ $UID != 0 ]
-	then
-		echo "Need to run as root to drive perf"
-		exit 1
-	fi
-
-	if [ ! -d ${HEATMAP} ]; then
-		git clone https://github.com/brendangregg/HeatMap.git ${HEATMAP}
-	fi
-
-	#
-	# From http://www.brendangregg.com/perf.html
-	#
-	perf record -e block:block_rq_issue -e block:block_rq_complete \
-		$FIO $* ${ROOT_PATH}/jobs/${JOB}
-	perf script | awk '{ gsub(/:/, "") } $5 ~ /issue/ { ts[$6, $10] = $4 }
-    		$5 ~ /complete/ { if (l = ts[$6, $9]) { printf "%.f %.f\n", $4 * 1000000,
-    		($4 - l) * 1000000; ts[$6, $10] = 0 } }' > ${LATENCY_US}
-
-	${HEATMAP}/trace2heatmap.pl --boxsize=16 --unitstime=us --unitslat=us --maxlat=100000 ${LATENCY_US} > ${JOB}-${SVG_HEATMAP_FILE}
-	rm ${LATENCY_US} perf.data
-}
-
-flamegraph()
-{
-	FOLDED=${TMP}/out.perf-folded.$$
-
-	if [ $UID != 0 ]; then
-        	echo "Need to run as root to drive perf"
-        	exit 1
-	fi
-	perf record -F ${PERF_FREQ} -g -- ${ROOT_PATH}/perf-wrapper.sh -e BLOCKSIZE=${BLOCKSIZE} -e SIZE=${SIZE} -e DIRECTORY=${DIRECTORY} $FIO $* ${ROOT_PATH}/jobs/${JOB} --output-format=json --output=${RESULTS_PATH}/fio-stats.json
-
-	#if [ ! -d ${ROOT_PATH}/${FLAMEGRAPH} ]; then
-        #	git clone https://github.com/brendangregg/FlameGraph.git ${FLAMEGRAPH}
-	#fi
-	#perf script | ${FLAMEGRAPH}/stackcollapse-perf.pl > ${FOLDED}
-	#${FLAMEGRAPH}/flamegraph.pl --minwidth=1 --width=${SVG_WIDTH} < ${FOLDED} > ${JOB}-${SVG_FLAMEGRAPH_FILE}
-	#rm ${FOLDED} perf.data
-}
-
-fg=0
-hm=0
-st=0
 
 while [ ! -z $1 ]
 do
@@ -161,17 +112,17 @@ do
 	-F)
 		FIO=$OPTARG
 		;;
-	-f)
-		echo "FlameGraph"
-		fg=1
-		;;
-	-h)
-		echo "HeatMap"
-		hm=1
+	-p)
+		echo "Perf"
+		SCENARIO=perf
+		if [ $UID != 0 ]; then
+			echo "Need to run as root to drive perf"
+			exit 1
+		fi
 		;;
 	-s)
 		echo "Stats"
-		st=1
+		SCENARIO=stats
 		;;
 	-j)
 		shift
@@ -180,15 +131,11 @@ do
 	*)
 		newopts="$newopts $1"
 	;;
-  esac
-  shift
+	esac
+	shift
 done
 
 newopts="$newopts"
-
-
-
-
 if [ -z $JOB ]; then
 	echo "No job specified"
 	exit 1
@@ -201,35 +148,10 @@ export BLOCKSIZE=${BLOCKSIZE}
 export SIZE=${SIZE}
 export DIRECTORY=${DIRECTORY}
 
-if [ $fg -eq 1 ]; then
-	SCENARIO=flamegraph
-	RESULTS_PATH=${ROOT_PATH}/${RESULTS}/${DATE_NOW}/job-${JOB}-kv-${KERNEL}-size-${SIZE}-bs-${BLOCKSIZE}-fs-${FILE_SYSTEM}-sched-${IOSCHED}-${ID}/${SCENARIO}
-	mkdir -p ${RESULTS_PATH}
-	log_job_info
-	cd ${RESULTS_PATH}
-	flamegraph $newopts
-	gzip --best ${RESULTS_PATH}/*.log
-	cd ${ROOT_PATH}
-fi
-
-if [ $hm -eq 1 ]; then
-	SCENARIO=heatmap
-	RESULTS_PATH=${ROOT_PATH}/${RESULTS}/${DATE_NOW}/job-${JOB}-kv-${KERNEL}-size-${SIZE}-bs-${BLOCKSIZE}-fs-${FILE_SYSTEM}-sched-${IOSCHED}-${ID}/${SCENARIO}
-	mkdir -p ${RESULTS_PATH}
-	log_job_info 
-	cd ${RESULTS_PATH}
-	heatmap $newopts
-	cd ${ROOT_PATH}
-fi
-
-if [ $st -eq 1 ]; then
-	SCENARIO=stats
-	RESULTS_PATH=${ROOT_PATH}/${RESULTS}/${DATE_NOW}/job-${JOB}-kv-${KERNEL}-size-${SIZE}-bs-${BLOCKSIZE}-fs-${FILE_SYSTEM}-sched-${IOSCHED}-${ID}/${SCENARIO}
-	mkdir -p ${RESULTS_PATH}
-	log_job_info
-	cd ${RESULTS_PATH}
-	stats $newopts
-	gzip --best ${RESULTS_PATH}/*.log
-	cd ${ROOT_PATH}
-fi
-
+RESULTS_PATH=${ROOT_PATH}/${RESULTS}/${DATE_NOW}/job-${JOB}-kv-${KERNEL}-size-${SIZE}-bs-${BLOCKSIZE}-fs-${FILE_SYSTEM}-sched-${IOSCHED}-${ID}/${SCENARIO}
+mkdir -p ${RESULTS_PATH}
+log_job_info
+cd ${RESULTS_PATH}
+stats $newopts
+gzip --best ${RESULTS_PATH}/*.log
+cd ${ROOT_PATH}
