@@ -187,7 +187,6 @@ do
 		echo $fs
 		for opt in s #p
 		do
-			umount $MNT
 			do_fs_new $fs
 			if [ $? -eq 0 ]; then
 				echo "Job: $job, Size $sz, IOsched $IOSCHED"
