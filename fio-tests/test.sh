@@ -125,7 +125,7 @@ if [ $UID -ne 0 ]; then
 	exit 1
 fi
 
-while getopts "d:m:s:" opt; do
+while getopts "D:T:d:m:s:" opt; do
 	case $opt in
 	D)
 		DATE_START=$OPTARG
