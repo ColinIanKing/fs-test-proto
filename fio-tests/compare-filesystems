@@ -155,11 +155,11 @@ def job_config_get(job):
 #  Variants of keys?
 #
 def keys_variant_collection(part_stats):
-	skipkeys = [ 'Time-run','Time', 'Kernel-version', 'Full Date']
+	skipkeys = [ 'Fiostats', 'Datapath', 'Samples', 'Time-run','Time', 'Kernel-version', 'Full Date']
 	keys = []
 	for stats in part_stats:
-		for (cur, sysinfo1, fio_stats, samples) in stats:
-			for (cur, sysinfo2, fio_stats, samples) in stats:
+		for sysinfo1 in stats:
+			for sysinfo2 in stats:
 				for key in sysinfo2:
 					try:
 						if not key in keys and not key in skipkeys and sysinfo1[key] != sysinfo2[key]:
@@ -207,16 +207,6 @@ def str_to_filename(str):
 	return filename
 
 #
-#  Save a png to file
-#
-def save_png(path, title, fig):
-	filename = str_to_filename(title)
-	pathname = os.path.join(path, filename + ".png")
-	fig.savefig(pathname, dpi=70, transparent=True)
-	print "Graphed " + filename
-	return filename
-
-#
 #  horizontal bar chart
 #
 def bar_horiz(html_subdirs, root_path, keys, config, collection):
@@ -243,7 +233,6 @@ def bar_horiz(html_subdirs, root_path, keys, config, collection):
 			end = l.split()[::-1][0]
 			if not end in endlabels:
 				endlabels.append(end)
-
 
 	html = ""
 	n = 0
@@ -374,11 +363,17 @@ def plot_horiz_trend(html_subdirs, path, keys, config, collection):
 
 	html_subdirs.append(generate_html([], html, new_path, new_path, title, title))
 
+#
+#  Calculate heatmap colors
+#
 def heatmap_colors(heatmap):
 	max_val = 0
 	for datarow in heatmap:
 		max_val = max(max_val, max(datarow))
 
+	#
+	# Create a range of colours 0..max_val
+	#
 	max_val += 1
 	red = float(255)
 	green = float(0)
@@ -399,7 +394,10 @@ def heatmap_colors(heatmap):
 
 	return colors[::-1]
 
-def moving_average(values,window):
+#
+#  Calculate moving average of data with a specificed window size
+#
+def moving_average(values, window):
     weights = np.repeat(1.0, window)/window
     return np.convolve(values, weights, 'valid')
 
@@ -656,7 +654,7 @@ def graph_stats(html_subdirs, root_path, graph_func, stats_collection, collectio
 	keys = keys_variant_collection(stats_collection)
 
 	for stats in stats_collection:
-		for (cur, sysinfo, fio_stats, samples) in stats:
+		for sysinfo in stats:
 			job = sysinfo['Job']
 			config = job_config_get(job)
 			for c in config:
@@ -677,7 +675,7 @@ def graph_stats(html_subdirs, root_path, graph_func, stats_collection, collectio
 	collection_fields_vary = []
 	for config in unique_configs:
 		for stats in stats_collection:
-			for (cur, sysinfo, fio_stats, samples) in stats:
+			for sysinfo in stats:
 				if config in job_config_get(sysinfo['Job']):
 					for c in sysinfokeys:
 						try:
@@ -699,7 +697,7 @@ def graph_stats(html_subdirs, root_path, graph_func, stats_collection, collectio
 		#  change across the tests
 		#
 		for stats in stats_collection:
-			for (cur, sysinfo, fio_stats, samples) in stats:
+			for sysinfo in stats:
 				if config in job_config_get(sysinfo['Job']):
 					for c in sysinfokeys:
 						try:
@@ -730,9 +728,9 @@ def graph_stats(html_subdirs, root_path, graph_func, stats_collection, collectio
 			yvalues = []
 			xlabels = []
 			sysinfos = []
-			for (cur, sysinfo, fio_stats, samples) in stats:
+			for sysinfo in stats:
 				if config in job_config_get(sysinfo['Job']):
-					val = get_json_val(fio_stats, jsonpath)
+					val = get_json_val(sysinfo['Fiostats'], jsonpath)
 					yvalues.append(val / scale)
 					xlabel = ""
 					for f in sysinfo_fields_vary:
@@ -761,24 +759,24 @@ def graph_stats(html_subdirs, root_path, graph_func, stats_collection, collectio
 #
 #  Load in fio-stats.json and sysinfo.log for the given tests
 #
-def collect_stats(path, want_samples):
+def collect_stats(path):
 	stats = []
-	for cur, _dirs, files in os.walk(path):
-		head, tail = os.path.split(cur)
+	for datapath, _dirs, files in os.walk(path):
+		head, tail = os.path.split(datapath)
 		if tail == "stats":
-			sysinfo = sysinfo_load(os.path.join(cur, 'sysinfo.log'))
+			sysinfo = sysinfo_load(os.path.join(datapath, 'sysinfo.log'))
 			job_config_get(sysinfo['Job'])
-			if want_samples:
-				samples = samples_load(cur)
-			else:
-				samples = None
+
+			sysinfo['Samples'] = None	# Loaded on demand later
+			sysinfo['Datapath'] = datapath
+
 			try:
-				f = open(os.path.join(cur, 'fio-stats.json'), 'r')
-				fio_stats = json.load(f)
+				f = open(os.path.join(datapath, 'fio-stats.json'), 'r')
+				sysinfo['Fiostats'] = json.load(f)
 				f.close()
-				stats.append((cur, sysinfo, fio_stats, samples))
+				stats.append(sysinfo)
 			except:
-				print "Failed to read fio-stats.json for " + cur
+				print "Failed to read fio-stats.json for " + datapath
 
 	return stats
 
@@ -787,7 +785,7 @@ def collect_stats(path, want_samples):
 #
 def find_matching_stats(stats, criteria):
 	matches = []
-	for (cur, sysinfo, fio_stats, samples) in stats:
+	for sysinfo in stats:
 		keep = True
 		for (key, values) in criteria:
 			if values != []:
@@ -798,14 +796,14 @@ def find_matching_stats(stats, criteria):
 						break
 				keep = keep and found
 		if keep:
-			matches.append((cur, sysinfo, fio_stats, samples))
+			matches.append(sysinfo)
 
 	return matches
 
 def find_unique_key_value_stats(stats, criteria, key):
 	values = []
 	matches = find_matching_stats(stats, criteria)
-	for (cur, sysinfo, fio_stats, samples) in matches:
+	for sysinfo in matches:
 		if not sysinfo[key] in values:
 			values.append(sysinfo[key])
 
@@ -853,7 +851,7 @@ def graph_samples(html_subdirs, root_path, path, key, stats, keys, title):
 	#
 	# Find all unique jobs
 	#
-	for (cur, sysinfo, fio_stats, samples) in stats:
+	for sysinfo in stats:
 		if sysinfo['Job'] not in jobs:
 			jobs.append(sysinfo['Job'])
 	#
@@ -861,10 +859,14 @@ def graph_samples(html_subdirs, root_path, path, key, stats, keys, title):
 	#
 	html = ""
 	for job in jobs:
+		print "Graphing " + title + " (" + job + ")"
 		data = []
 		titles = []
-		for (cur, sysinfo, fio_stats, samples) in stats:
+		for sysinfo in stats:
 			if sysinfo['Job'] == job:
+				if sysinfo['Samples'] == None:
+					sysinfo['Samples'] = samples_load(sysinfo['Datapath'])
+				samples = sysinfo['Samples']
 				data.append((samples[key], sysinfo))
 				titles.append(sysinfo_keys_to_label(sysinfo, keys))
 		#
@@ -890,7 +892,7 @@ def graph_samples(html_subdirs, root_path, path, key, stats, keys, title):
 #
 def compare_stats_ordered_traverse(graph_func, stats, group_by_keys, collection_keys, traversed_stats):
 	if (len(group_by_keys) <= 1):
-		sortstats = sorted(stats, key = lambda d: d[1][group_by_keys[0]])
+		sortstats = sorted(stats, key = lambda d: d[group_by_keys[0]])
 		traversed_stats.append(sortstats)
 		return
 	#
@@ -905,15 +907,15 @@ def compare_stats_ordered_traverse(graph_func, stats, group_by_keys, collection_
 		compare_stats_ordered_traverse(graph_func, stats, suborder_by_keys, collection_keys, traversed_stats)
 	else:
 		values = []
-		for (cur, sysinfo, fio_stats, samples) in stats:
+		for sysinfo in stats:
 			if not sysinfo[k] in values:
 				values.append(sysinfo[k])
 
 		for v in values:
 			substats = []
-			for (cur, sysinfo, fio_stats, samples) in stats:
+			for sysinfo in stats:
 				if sysinfo[k] == v:
-					substats.append((cur, sysinfo, fio_stats, samples))
+					substats.append(sysinfo)
 
 			compare_stats_ordered_traverse(graph_func, substats, suborder_by_keys, collection_keys, traversed_stats)
 
@@ -1017,11 +1019,11 @@ stats = []
 tmpdir = "/tmp/test"
 print "Results in " + tmpdir
 
-do_daily = False
+do_daily = True
 
-print "Reading data.."
+print "Reading metadata.."
 for i in range(1, len(sys.argv)):
-	stats += collect_stats(sys.argv[i], do_daily)
+	stats += collect_stats(sys.argv[i])
 
 mkdirp(tmpdir)
 
