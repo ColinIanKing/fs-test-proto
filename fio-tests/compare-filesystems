@@ -32,6 +32,11 @@ import operator
 
 #default_colors = [ '#f37320', '#f7995b', '#fabb8d' ]
 default_colors = [ '#ff0000', '#00ff00', '#0000ff' ]
+#
+# Default graph sizes in pixels
+#
+default_width = '1000px'
+default_height = '500px'
 
 job_config_cache = {}
 
@@ -156,17 +161,17 @@ def job_config_get(job):
 #
 def keys_variant_collection(part_stats):
 	skipkeys = [ 'Fiostats', 'Datapath', 'Samples', 'Time-run','Time', 'Kernel-version', 'Full Date']
-	keys = []
+	keys = set([])
 	for stats in part_stats:
 		for sysinfo1 in stats:
 			for sysinfo2 in stats:
 				for key in sysinfo2:
 					try:
-						if not key in keys and not key in skipkeys and sysinfo1[key] != sysinfo2[key]:
-							keys.append(key)
+						if not key in skipkeys and sysinfo1[key] != sysinfo2[key]:
+							keys.add(key)
 					except:
 						pass
-	return keys
+	return list(keys)
 
 #
 #  Remove trailing comma and spaces from label
@@ -187,11 +192,7 @@ def array_to_str(array):
 #  keys in sysinfo to a label
 #
 def sysinfo_keys_to_label(sysinfo, keys):
-	label = []
-	for key in keys:
-		label.append(sysinfo[key])
-
-	return ', '.join(label)
+	return ', '.join([ sysinfo[key] for key in keys ])
 
 #
 #  Convert a string into a filename containing letters and digits
@@ -274,7 +275,7 @@ def bar_horiz(html_subdirs, root_path, keys, config, collection):
         chart.draw(data, options);
       }
 	</script>
-	<div id="chart_div" style="width: 900px; height: 500px;"></div>'''
+	<div id="chart_div" style="width: ''' + default_width + '''; height: ''' + default_width + ''';"></div>'''
 
 	html_subdirs.append(generate_html([], html, root_path, newpath, filename, title))
 
@@ -289,27 +290,22 @@ def plot_horiz_trend(html_subdirs, path, keys, config, collection):
 	# Determine all the xlabels in the collection
 	# and collect up unique filesystems and ioscheds
 	#
-	filesystems = []
-	ioscheds = []
+	filesystems = set([])
+	ioscheds = set([])
 	all_xlabels = set([])
-	ymax = 0
-	ymin = 1e12
 	for (subtitle, xlabels, yvalues, xlabel, sysinfos) in collection:
 		for xlabel in xlabels:
 			all_xlabels.add(xlabel)
-
-		ymax = max(ymax, max(yvalues))
-		ymin = min(ymin, min(yvalues))
-
 		for sysinfo in sysinfos:
-			if not sysinfo['Filesystem'] in filesystems:
-				filesystems.append(sysinfo['Filesystem'])
-			if not sysinfo['IO Scheduler'] in ioscheds:
-				ioscheds.append(sysinfo['IO Scheduler'])
+			filesystems.add(sysinfo['Filesystem'])
+			ioscheds.add(sysinfo['IO Scheduler'])
+
+	all_xlabels = sorted(all_xlabels)
+	ioscheds = sorted(ioscheds)
+	filesystems = sorted(filesystems)
 
 	new_path = os.path.join(path, str_to_filename(title))
 	mkdirp(new_path)
-	all_xlabels = sorted(all_xlabels)
 
 	chart = 0
 	html = ""
@@ -357,7 +353,7 @@ def plot_horiz_trend(html_subdirs, path, keys, config, collection):
         chart.draw(data, options);
       }
 	</script>
-	<div id="chart_div_''' + io + '''" style="width: 900px; height: 500px;"></div>'''
+	<div id="chart_div_''' + io + '''" style="width: ''' + default_width + '''; height: ''' + default_height + ''';"></div>'''
 
 	html_subdirs.append(generate_html([], html, new_path, new_path, title, title))
 
@@ -470,7 +466,7 @@ def plot_samples_raw_fio_data(root_path, key, keys, title, sysinfos):
         chart.draw(data, options);
       }
 	</script>
-	<div id="chart_div_hist" style="width: 900px; height: 500px;"></div>'''
+	<div id="chart_div_hist" style="width: ''' + default_width + '''; height: ''' + default_height + ''';"></div>'''
 
 	#
 	# Now do scatter plot and heat maps
@@ -803,7 +799,7 @@ def find_matching_stats(stats, criteria):
 
 def find_unique_key_value_stats(stats, criteria, key):
 	values = []
-	matches = find_matching_stats(stats, criteria)
+        matches = find_matching_stats(stats, criteria)
 	for sysinfo in matches:
 		if not sysinfo[key] in values:
 			values.append(sysinfo[key])
@@ -1017,18 +1013,14 @@ stats = []
 tmpdir = "/tmp/test"
 print "Results in " + tmpdir
 
-do_daily = False
-
 print "Reading metadata.."
 for i in range(1, len(sys.argv)):
 	stats += collect_stats(sys.argv[i])
 
 mkdirp(tmpdir)
 
-if do_daily:
-	daily_tests_histogram(html_dirs, tmpdir, dates)
-	daily_tests_samples(html_dirs, tmpdir, dates)
-else:
-	overtime_trends(html_dirs, tmpdir)
+daily_tests_histogram(html_dirs, tmpdir, dates)
+daily_tests_samples(html_dirs, tmpdir, dates)
+overtime_trends(html_dirs, tmpdir)
 
 generate_html(html_dirs, "", tmpdir, tmpdir, 'results', 'All results')
