@@ -23,9 +23,7 @@ import sys
 import stat
 import json
 import numpy as np
-import matplotlib as mpl
-import matplotlib.pyplot as plt
-import pylab
+#import pylab
 import re
 import gzip
 import string
@@ -33,7 +31,8 @@ import errno
 import textwrap
 import operator
 
-ubuntu_colors = [ '#f37320', '#f7995b', '#fabb8d' ]
+#ubuntu_colors = [ '#f37320', '#f7995b', '#fabb8d' ]
+ubuntu_colors = [ '#ff0000', '#00ff00', '#0000ff' ]
 
 job_config_cache = {}
 
@@ -93,10 +92,10 @@ def generate_html(html_subdirs, html, root_path, sub_path, html_file, title):
 #
 samples_info = [
 	#  key		human readable title			regex on log name	generated filename path
-	('Bandwidth',	'Bandwidth KB per second (by test)',	'job.*_bw\.log*', 	'daily-fio-stats-bandwidth'),
-	('IOops',	'I/O ops per second (by test)', 	'job.*_iops\.log*', 	'daily-fio-stats-io-ops'),
-	('IOLatency',	'I/O Latency (us) (by test)', 		'job.*_lat\.log*', 	'daily-fio-stats-io-latency'),
-	('IOCLatencty',	'I/O Completion Latency (us) (by test)','job.*_clat\.log*', 	'daily-fio-stats-clatency') ]
+	('Bandwidth',	'Bandwidth KB per second',	'job.*_bw\.log*', 	'daily-fio-stats-bandwidth'),
+	('IOops',	'I/O ops per second', 		'job.*_iops\.log*', 	'daily-fio-stats-io-ops'),
+	('IOLatency',	'I/O Latency (us)', 		'job.*_lat\.log*', 	'daily-fio-stats-io-latency'),
+	('IOCLatencty',	'I/O Completion Latency (us)',	'job.*_clat\.log*', 	'daily-fio-stats-clatency') ]
 
 #
 #  Create all dirs in a given path
@@ -408,6 +407,10 @@ def heatmap_colors(heatmap):
 
 	return colors[::-1]
 
+def moving_average(values,window):
+    weights = np.repeat(1.0, window)/window
+    return np.convolve(values, weights, 'valid')
+
 
 #
 #  plot samples and heatmaps from raw fio data
@@ -426,6 +429,62 @@ def plot_samples_raw_fio_data(root_path, keys, title, data):
 		if not sysinfo['IO Scheduler'] in ioscheds:
 			ioscheds.append(sysinfo['IO Scheduler'])
 
+	#
+	# Part #1, histogram of means
+	#
+	mean_y = []
+	vticks = []
+	for fs in sorted(filesystems):
+		for io in sorted(ioscheds):
+			for (values, sysinfo) in data:
+				if sysinfo['Filesystem'] == fs and sysinfo['IO Scheduler'] == io:
+					total_y = 0
+					total_n = 0
+					for (x, y) in values:
+						total_y += sum(y)
+						total_n += len(y)
+	
+					if total_n != 0:
+						mean_y.append(float(total_y) / total_n)
+					else:
+						mean_y.append(0)
+					vticks.append(io + ' ' + fs)
+
+	html += '''
+	<script type="text/javascript">
+	google.load("visualization", "1", {packages:["corechart"]});
+	google.setOnLoadCallback(drawChart);
+	function drawChart() {
+        var data = google.visualization.arrayToDataTable([
+	'''
+
+	html += "['Filesytem', '" + title + "'," + \
+		" { role: 'style' }],\n"
+
+	for i in range(0, len(mean_y)):
+		fs = vticks[i].split()[::-1][0]
+		html += "['" + vticks[i] + "', " + str(mean_y[i]) + "," + \
+			"'fill-color: " + ubuntu_colors[filesystems.index(fs)] + "; " + \
+			"fill-opacity: 0.9'],\n"
+
+	html += "]);\n"
+	html += '''
+        var options = {
+          title: 'Mean ''' + title + ''' ',
+          vAxis: {title: 'Configuration' },
+          hAxis: {title: 'Mean ''' + title + ''' ', minValue: 0 },
+	  legend: {position: 'none' }
+        };
+
+        var chart = new google.visualization.BarChart(document.getElementById('chart_div_hist'));
+        chart.draw(data, options);
+      }
+	</script>
+	<div id="chart_div_hist" style="width: 900px; height: 500px;"></div>'''
+
+	#
+	# Now do scatter plot and heat maps
+	#
 	for fs in sorted(filesystems):
 		for io in sorted(ioscheds):
 			for (values, sysinfo) in data:
@@ -450,6 +509,7 @@ def plot_samples_raw_fio_data(root_path, keys, title, data):
 
 					max_y = max(all_y)
 					max_x = max(all_x)
+					avg_y = moving_average(all_y, len(all_y) / 20)
 
 					rows=32
 					cols=64
@@ -471,12 +531,15 @@ def plot_samples_raw_fio_data(root_path, keys, title, data):
 					for k in range(0, tick_interval + 1):
 						hticks.append("{v:" + str(k * float(max_x)/tick_interval) + ", f:'" + str(k * float(max_x)/tick_interval) + "'}")
 
-					n = len(all_x)
-					if n > 10000:
-						skip = n / 1000
+					n = len(all_y)
+					# print "%d items of data" % n
+					mean_y = float(sum(all_y)) / n
+					skip = float(n) / float(1000)
+					if skip > 1:
+						skip = int(skip)
 						all_x = all_x[::skip]
 						all_y = all_y[::skip]
-
+						avg_y = avg_y[::skip]
 					html += '''
 <html>
   <head>
@@ -490,16 +553,24 @@ def plot_samples_raw_fio_data(root_path, keys, title, data):
       google.setOnLoadCallback(drawChart);
       function drawChart() {
         var data = google.visualization.arrayToDataTable([
-['Sample #','Bandwidth'],
+['Sample #','Value', 'Rolling Average', 'Mean'],
 '''
-					for k in range(0,len(all_x)):
-						html += "[" + str(all_x[k]) + "," + str(all_y[k]) + "],\n"
+					n_avg_y = len(avg_y)
+					offset = (len(all_y) - n_avg_y) / 2
+					mean_y = str(mean_y)
+					for k in range(0,len(all_y)):
+						if k >= offset and (k - offset) < n_avg_y:
+							avg = str(avg_y[k - offset])
+						else:
+							avg = "null"
+						html += "[" + str(all_x[k]) + "," + str(all_y[k]) + "," + avg + "," + mean_y +"],\n"
+
 					html += '''
 	]);
 
         var options = {
           title: ''' + "'" + subtitle + sysinfo_keys_to_label(sysinfo, keys) + "'" + ''',
-          legend: 'none',
+          legend: { position: 'right' },
           pointSize: 0.1,
 	  width: 500,
 	  height: 300,
@@ -518,14 +589,14 @@ def plot_samples_raw_fio_data(root_path, keys, title, data):
       google.setOnLoadCallback(drawChart);
       function drawChart() {
         var data = google.visualization.arrayToDataTable([
-['Sample #','Bandwidth', { role: 'style'}],
+['Sample #','Value',{ role: 'style'}],
 '''
 					colors = heatmap_colors(heatmap)
 					row=0
 					for datarow in heatmap:
 						col = 0
 						for d in datarow:
-							html += "[" + str(col + 0.5)  + "," + str(row + 0.5) + ", 'color:#" + colors[int(d)] + "'],\n"
+							html += "[" + str(col + 0.5)  + "," + str(row + 0.5) + ",'color:#" + colors[int(d)] + "'],"
 							col += 1
 						row += 1
 
@@ -563,61 +634,6 @@ def plot_samples_raw_fio_data(root_path, keys, title, data):
 					chart += 1
 
 	return html
-
-def hist_samples_raw_fio_data(path, keys, title, data):
-	title_keys = ['Job', 'Filesystem', 'Kernel-release']
-	filesystems = []
-	ioscheds = []
-	for (values, sysinfo) in data:
-		if not sysinfo['Filesystem'] in filesystems:
-			filesystems.append(sysinfo['Filesystem'])
-		if not sysinfo['IO Scheduler'] in ioscheds:
-			ioscheds.append(sysinfo['IO Scheduler'])
-
-	filesystems = sorted(filesystems)[::-1]
-	ioscheds = sorted(ioscheds)[::-1]
-	colors ='rgbwmcrgbwnc'[0:len(filesystems)]
-
-	subtitle = ""
-	for k in title_keys:
-		if not k in keys:
-			subtitle += sysinfo[k] + ", "
-
-	mean_y = []
-	ticks = []
-	#
-	# Inefficient, needs optimising, but normally it's just
-	# over 9 or so values, so it's ok for the moment
-	#
-	for fs in filesystems:
-		for io in ioscheds:
-			for (values, sysinfo) in data:
-				if sysinfo['Filesystem'] == fs and sysinfo['IO Scheduler'] == io:
-					total_y = 0
-					total_n = 0
-					for (x, y) in values:
-						total_y += sum(y)
-						total_n += len(y)
-
-					if total_n != 0:
-						mean_y.append(float(total_y) / total_n)
-					else:
-						mean_y.append(0)
-					ticks.append(io + ' ' + fs)
-
-	fig, plot = plt.subplots(1, figsize=(8, 0.5 * len(data) + 1))
-	pos = np.arange(len(data))
-
-	plot.xaxis.grid(True, which='both')
-	plot.barh(pos, mean_y, align='center', color=colors)
-	plot.set_title(title + '\n' + subtitle)
-	fig.sca(plot)
-	plt.yticks(pos, ticks)
-
-	plt.tight_layout()
-	save_png(path, title + '-1-histogram', fig)
-	plt.close()
-	return
 
 #
 #  Traverse a path to find json values
@@ -833,7 +849,7 @@ def samples_load_by_pattern(path, pattern):
 #  Load samples from file from a given path
 #
 def samples_load(path):
-	print "Loading samples for " + path
+	print "Loading data: " + path
 	samples = {}
 	for (key, title, pattern, name) in samples_info:
 		samples[key] = samples_load_by_pattern(path, pattern)
@@ -852,7 +868,7 @@ def graph_samples(html_subdirs, root_path, path, key, stats, keys, title):
 	# Process data from each unique job:
 	#
 	html = ""
-	for job in jobs[0:1]:
+	for job in jobs:
 		data = []
 		titles = []
 		for (cur, sysinfo, fio_stats, samples) in stats:
@@ -871,7 +887,6 @@ def graph_samples(html_subdirs, root_path, path, key, stats, keys, title):
 
 		if len(data):
 			html = plot_samples_raw_fio_data(new_path, keys, title, data)
-			#hist_samples_raw_fio_data(new_path, keys, title, data)
 			html_subdirs.append(generate_html([], html, root_path, new_path, job, job))
 		else:
 			print "No relevant data can be found"
@@ -1019,7 +1034,7 @@ for i in range(1, len(sys.argv)):
 mkdirp(tmpdir)
 
 if do_daily:
-	#daily_tests_histogram(html_dirs, tmpdir, dates)
+	daily_tests_histogram(html_dirs, tmpdir, dates)
 	daily_tests_samples(html_dirs, tmpdir, dates)
 else:
 	overtime_trends(html_dirs, tmpdir)
