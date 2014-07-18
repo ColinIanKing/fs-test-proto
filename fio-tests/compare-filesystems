@@ -227,12 +227,11 @@ def bar_horiz(html_subdirs, root_path, keys, config, collection):
 	#  Collect up end labels, see how many there are and
 	#  this allows us to determine how to color the bars
 	#
-	endlabels = []
+	endlabels = set([])
 	for (subtitle, xlabels, yvalues, xlabel, sysinfos) in collection:
 		for l in xlabels:
-			end = l.split()[::-1][0]
-			if not end in endlabels:
-				endlabels.append(end)
+			endlabels.add(l.split()[::-1][0])
+	endlabels = sorted(endlabels)
 
 	html = ""
 	n = 0
@@ -292,13 +291,12 @@ def plot_horiz_trend(html_subdirs, path, keys, config, collection):
 	#
 	filesystems = []
 	ioscheds = []
-	all_xlabels = []
+	all_xlabels = set([])
 	ymax = 0
 	ymin = 1e12
 	for (subtitle, xlabels, yvalues, xlabel, sysinfos) in collection:
 		for xlabel in xlabels:
-			if not xlabel in all_xlabels:
-				all_xlabels.append(xlabel)
+			all_xlabels.add(xlabel)
 
 		ymax = max(ymax, max(yvalues))
 		ymin = min(ymin, min(yvalues))
@@ -410,22 +408,23 @@ def plot_samples_raw_fio_data(root_path, key, keys, title, sysinfos):
 
 	html = ""
 	chart = 0
-	filesystems = []
-	ioscheds = []
+	filesystems = set([])
+	ioscheds = set([])
 
 	for sysinfo in sysinfos:
-		if not sysinfo['Filesystem'] in filesystems:
-			filesystems.append(sysinfo['Filesystem'])
-		if not sysinfo['IO Scheduler'] in ioscheds:
-			ioscheds.append(sysinfo['IO Scheduler'])
+		filesystems.add(sysinfo['Filesystem'])
+		ioscheds.add(sysinfo['IO Scheduler'])
+
+	filesystems = sorted(filesystems)
+	ioscheds = sorted(ioscheds)
 
 	#
 	# Part #1, histogram of means
 	#
 	mean_y = []
 	vticks = []
-	for fs in sorted(filesystems):
-		for io in sorted(ioscheds):
+	for fs in filesystems:
+		for io in ioscheds:
 			for sysinfo in sysinfos:
 				if sysinfo['Filesystem'] == fs and sysinfo['IO Scheduler'] == io:
 					samples = sysinfo['Samples'][key]
@@ -847,13 +846,13 @@ def samples_load(path):
 	return samples
 
 def graph_samples(html_subdirs, root_path, path, key, stats, keys, title):
-	jobs = []
+	jobs = set([])
 	#
 	# Find all unique jobs
 	#
 	for sysinfo in stats:
-		if sysinfo['Job'] not in jobs:
-			jobs.append(sysinfo['Job'])
+		jobs.add(sysinfo['Job'])
+	jobs = sorted(jobs)
 	#
 	# Process data from each unique job:
 	#
@@ -906,10 +905,9 @@ def compare_stats_ordered_traverse(graph_func, stats, group_by_keys, collection_
 	if not k in collection_keys:
 		compare_stats_ordered_traverse(graph_func, stats, suborder_by_keys, collection_keys, traversed_stats)
 	else:
-		values = []
+		values = set([])
 		for sysinfo in stats:
-			if not sysinfo[k] in values:
-				values.append(sysinfo[k])
+			values.add(sysinfo[k])
 
 		for v in values:
 			substats = []
@@ -1019,7 +1017,7 @@ stats = []
 tmpdir = "/tmp/test"
 print "Results in " + tmpdir
 
-do_daily = True
+do_daily = False
 
 print "Reading metadata.."
 for i in range(1, len(sys.argv)):
