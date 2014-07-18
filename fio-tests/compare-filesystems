@@ -23,7 +23,6 @@ import sys
 import stat
 import json
 import numpy as np
-#import pylab
 import re
 import gzip
 import string
@@ -125,13 +124,6 @@ def sysinfo_load(file):
 			sysinfo[key] = val.lstrip()
 	f.close()
 	return sysinfo
-
-#
-#  Text wrap
-#
-def text_wrap(text, len):
-	return '\n'.join(textwrap.wrap(text, len))
-
 
 #
 #  Get and cache job configuration data
@@ -1025,7 +1017,7 @@ stats = []
 tmpdir = "/tmp/test"
 print "Results in " + tmpdir
 
-do_daily = True
+do_daily = False
 
 print "Reading data.."
 for i in range(1, len(sys.argv)):
