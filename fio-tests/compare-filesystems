@@ -386,8 +386,11 @@ def heatmap_colors(heatmap):
 #  Calculate moving average of data with a specificed window size
 #
 def moving_average(values, window):
-    weights = np.repeat(1.0, window)/window
-    return np.convolve(values, weights, 'valid')
+	weights = np.repeat(1.0, window)/window
+	if len(weights) == 0:
+		return []
+	else:
+		return np.convolve(values, weights, 'valid')
 
 
 #
@@ -857,7 +860,7 @@ def graph_samples(html_subdirs, root_path, path, key, stats, keys, title):
 #
 #  break stats into collections based on the group_by_keys
 #
-def compare_stats_ordered_traverse(graph_func, stats, group_by_keys, collection_keys, traversed_stats):
+def compare_stats_ordered_traverse(stats, group_by_keys, collection_keys, traversed_stats):
 	if (len(group_by_keys) <= 1):
 		sortstats = sorted(stats, key = lambda d: d[group_by_keys[0]])
 		traversed_stats.append(sortstats)
@@ -871,7 +874,7 @@ def compare_stats_ordered_traverse(graph_func, stats, group_by_keys, collection_
 	suborder_by_keys = group_by_keys[1:len(group_by_keys)]
 
 	if not k in collection_keys:
-		compare_stats_ordered_traverse(graph_func, stats, suborder_by_keys, collection_keys, traversed_stats)
+		compare_stats_ordered_traverse(stats, suborder_by_keys, collection_keys, traversed_stats)
 	else:
 		values = set([])
 		for sysinfo in stats:
@@ -879,14 +882,14 @@ def compare_stats_ordered_traverse(graph_func, stats, group_by_keys, collection_
 
 		for v in values:
 			substats = [ sysinfo for sysinfo in stats if sysinfo[k] == v ]
-			compare_stats_ordered_traverse(graph_func, substats, suborder_by_keys, collection_keys, traversed_stats)
+			compare_stats_ordered_traverse(substats, suborder_by_keys, collection_keys, traversed_stats)
 
 #
 #  group up data by group_by_keys and then graph it using graph_func
 #
 def compare_stats_ordered(html_subdirs, path, graph_func, stats, group_by_keys, collection_keys):
 	traversed_stats = []
-	compare_stats_ordered_traverse(graph_func, stats, group_by_keys, collection_keys, traversed_stats)
+	compare_stats_ordered_traverse(stats, group_by_keys, collection_keys, traversed_stats)
 	graph_stats(html_subdirs, path, graph_func, traversed_stats, collection_keys)
 
 
@@ -975,7 +978,7 @@ def overtime_trends(html_dirs, root_path):
 #
 #  Gather up stats
 #
-dates = ['2014-07-16' ]
+dates = []
 html_dirs = []
 stats = []
 tmpdir = "/tmp/test"
@@ -988,7 +991,7 @@ for i in range(1, len(sys.argv)):
 mkdirp(tmpdir)
 
 daily_tests_histogram(html_dirs, tmpdir, dates)
-#daily_tests_samples(html_dirs, tmpdir, dates)
-#overtime_trends(html_dirs, tmpdir)
+daily_tests_samples(html_dirs, tmpdir, dates)
+overtime_trends(html_dirs, tmpdir)
 
 generate_html(html_dirs, "", tmpdir, tmpdir, 'results', 'All results')
