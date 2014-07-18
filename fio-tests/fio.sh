@@ -141,16 +141,14 @@ flamegraph()
         	echo "Need to run as root to drive perf"
         	exit 1
 	fi
+	perf record -F ${PERF_FREQ} -g -- ${ROOT_PATH}/perf-wrapper.sh -e BLOCKSIZE=${BLOCKSIZE} -e SIZE=${SIZE} -e DIRECTORY=${DIRECTORY} $FIO $* ${ROOT_PATH}/jobs/${JOB} --output-format=json --output=${RESULTS_PATH}/fio-stats.json
 
-	perf record -F ${PERF_FREQ} -g -- $FIO $* ${ROOT_PATH}/jobs/${JOB}
-
-	if [ ! -d ${ROOT_PATH}/${FLAMEGRAPH} ]; then
-        	git clone https://github.com/brendangregg/FlameGraph.git ${FLAMEGRAPH}
-	fi
-
-	perf script | ${FLAMEGRAPH}/stackcollapse-perf.pl > ${FOLDED}
-	${FLAMEGRAPH}/flamegraph.pl --minwidth=1 --width=${SVG_WIDTH} < ${FOLDED} > ${JOB}-${SVG_FLAMEGRAPH_FILE}
-	rm ${FOLDED} perf.data
+	#if [ ! -d ${ROOT_PATH}/${FLAMEGRAPH} ]; then
+        #	git clone https://github.com/brendangregg/FlameGraph.git ${FLAMEGRAPH}
+	#fi
+	#perf script | ${FLAMEGRAPH}/stackcollapse-perf.pl > ${FOLDED}
+	#${FLAMEGRAPH}/flamegraph.pl --minwidth=1 --width=${SVG_WIDTH} < ${FOLDED} > ${JOB}-${SVG_FLAMEGRAPH_FILE}
+	#rm ${FOLDED} perf.data
 }
 
 fg=0
@@ -210,6 +208,7 @@ if [ $fg -eq 1 ]; then
 	log_job_info
 	cd ${RESULTS_PATH}
 	flamegraph $newopts
+	gzip --best ${RESULTS_PATH}/*.log
 	cd ${ROOT_PATH}
 fi
 
