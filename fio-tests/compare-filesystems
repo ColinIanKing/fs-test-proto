@@ -29,13 +29,13 @@ import string
 import errno
 import operator
 
-#default_colors = [ '#f37320', '#f7995b', '#fabb8d' ]
 default_colors = [ '#ff0000', '#00ff00', '#0000ff' ]
 #
 # Default graph sizes in pixels
 #
 default_width = '1000px'
 default_height = '500px'
+default_max_plots_in_scatter_plot = 1500
 
 job_config_cache = {}
 
@@ -229,17 +229,14 @@ def bar_horiz(html_subdirs, root_path, keys, config, collection):
 	#
 	endlabels = set([])
 	for (subtitle, xlabels, yvalues, xlabel, sysinfos) in collection:
-		for l in xlabels:
-			endlabels.add(l.split()[::-1][0])
+		endlabels = endlabels.union({ l.split()[::-1][0] for l in xlabels })
 	endlabels = sorted(endlabels)
 
 	html = ""
 	n = 0
 	for c in collection:
 		(subtitle, xlabels, yvalues, xlabel, sysinfos) = c
-		xvalues = []
-		for x in xlabels:
-			xvalues.append(xlabels.index(x))
+		xvalues = [ xlabels.index(x) for x in xlabels ]
 		#
 		#  And sort values in x order (sigh)
 		#
@@ -293,11 +290,9 @@ def plot_horiz_trend(html_subdirs, path, keys, config, collection):
 	ioscheds = set([])
 	all_xlabels = set([])
 	for (subtitle, xlabels, yvalues, xlabel, sysinfos) in collection:
-		for xlabel in xlabels:
-			all_xlabels.add(xlabel)
-		for sysinfo in sysinfos:
-			filesystems.add(sysinfo['Filesystem'])
-			ioscheds.add(sysinfo['IO Scheduler'])
+		all_xlabels = all_xlabels.union({ xlabel for xlabel in xlabels })
+		filesystems = filesystems.union({ sysinfo['Filesystem'] for sysinfo in sysinfos })
+		ioscheds = ioscheds.union({ sysinfo['IO Scheduler'] for sysinfo in sysinfos })
 
 	all_xlabels = sorted(all_xlabels)
 	ioscheds = sorted(ioscheds)
@@ -403,15 +398,9 @@ def plot_samples_raw_fio_data(root_path, key, keys, title, sysinfos):
 
 	html = ""
 	chart = 0
-	filesystems = set([])
-	ioscheds = set([])
 
-	for sysinfo in sysinfos:
-		filesystems.add(sysinfo['Filesystem'])
-		ioscheds.add(sysinfo['IO Scheduler'])
-
-	filesystems = sorted(filesystems)
-	ioscheds = sorted(ioscheds)
+	filesystems = sorted({ sysinfo['Filesystem'] for sysinfo in sysinfos })
+	ioscheds = sorted({ sysinfo['IO Scheduler'] for sysinfo in sysinfos })
 
 	#
 	# Part #1, histogram of means
@@ -518,14 +507,12 @@ def plot_samples_raw_fio_data(root_path, key, keys, title, sysinfos):
 						hticks.append("{v:" + str(k * float(max_x)/tick_interval) + ", f:'" + str(k * float(max_x)/tick_interval) + "'}")
 
 					n = len(all_y)
-					# print "%d items of data" % n
 					mean_y = float(sum(all_y)) / n
-					skip = float(n) / float(1000)
+					skip = float(n) / float(default_max_plots_in_scatter_plot)
 					if skip > 1:
-						skip = int(skip)
-						all_x = all_x[::skip]
-						all_y = all_y[::skip]
-						avg_y = avg_y[::skip]
+						all_x = [ all_x[int(r)] for r in np.arange(0, len(all_x) - 1, skip)]
+						all_y = [ all_y[int(r)] for r in np.arange(0, len(all_y) - 1, skip)]
+						avg_y = [ avg_y[int(r)] for r in np.arange(0, len(avg_y) - 1, skip)]
 					html += '''
 <html>
   <head>
@@ -664,26 +651,7 @@ def graph_stats(html_subdirs, root_path, graph_func, stats_collection, collectio
 	sysinfokeys = [ 'Blocksize', 'Filesystem', 'Device', 'Hardware',
 		       	'Job', 'Date', 'Kernel-release', 'Filesize', 'Processor', 'IO Scheduler' ]
 	#
-	#  Step #1, find all the different sysinfo fields that change
-	#  across all the collections and tests
-	#
-	sysinfovals = {}
-	collection_fields_vary = []
-	for config in unique_configs:
-		for stats in stats_collection:
-			for sysinfo in stats:
-				if config in job_config_get(sysinfo['Job']):
-					for c in sysinfokeys:
-						try:
-							if not sysinfo[c] in sysinfovals[c]:
-								sysinfovals[c].append(sysinfo[c])
-						except:
-							sysinfovals[c] = [ sysinfo[c] ]
-	for s in sysinfovals:
-		if len(sysinfovals[s]) > 1:
-			collection_fields_vary.append(s)
-	#
-	#  Step #2, gather the data
+	#   gather the data
 	#
 	for config in unique_configs:
 		sysinfovals = {}
@@ -715,10 +683,7 @@ def graph_stats(html_subdirs, root_path, graph_func, stats_collection, collectio
 		units = config['Units']
 		scale = float(config['Scale'])
 		jsonpath = config['JsonPath']
-
-		subtitle = []
-		for f in sysinfo_fields_static:
-			subtitle.append(sysinfo[f])
+		subtitle = [ sysinfo[f] for f in sysinfo_fields_static ]
 
 		for stats in stats_collection:
 			yvalues = []
@@ -841,13 +806,10 @@ def samples_load(path):
 	return samples
 
 def graph_samples(html_subdirs, root_path, path, key, stats, keys, title):
-	jobs = set([])
 	#
 	# Find all unique jobs
 	#
-	for sysinfo in stats:
-		jobs.add(sysinfo['Job'])
-	jobs = sorted(jobs)
+	jobs = sorted({ sysinfo['Job'] for sysinfo in stats})
 	#
 	# Process data from each unique job:
 	#
@@ -905,11 +867,7 @@ def compare_stats_ordered_traverse(graph_func, stats, group_by_keys, collection_
 			values.add(sysinfo[k])
 
 		for v in values:
-			substats = []
-			for sysinfo in stats:
-				if sysinfo[k] == v:
-					substats.append(sysinfo)
-
+			substats = [ sysinfo for sysinfo in stats if sysinfo[k] == v ]
 			compare_stats_ordered_traverse(graph_func, substats, suborder_by_keys, collection_keys, traversed_stats)
 
 #
