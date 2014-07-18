@@ -33,8 +33,8 @@ default_colors = [ '#ff0000', '#00ff00', '#0000ff' ]
 #
 # Default graph sizes in pixels
 #
-default_width = '1000px'
-default_height = '500px'
+default_width = 1000
+default_height = 500
 default_max_plots_in_scatter_plot = 1500
 
 job_config_cache = {}
@@ -191,7 +191,7 @@ def array_to_str(array):
 #  keys in sysinfo to a label
 #
 def sysinfo_keys_to_label(sysinfo, keys):
-	return ', '.join([ sysinfo[key] for key in keys ])
+	return ', '.join([ sysinfo[key] for key in keys if key in sysinfo ])
 
 #
 #  Convert a string into a filename containing letters and digits
@@ -271,7 +271,7 @@ def bar_horiz(html_subdirs, root_path, keys, config, collection):
         chart.draw(data, options);
       }
 	</script>
-	<div id="chart_div" style="width: ''' + default_width + '''; height: ''' + default_width + ''';"></div>'''
+	<div id="chart_div" style="width: ''' + str(default_width) + '''px; height: ''' + str(default_width) + '''px;"></div>'''
 
 	html_subdirs.append(generate_html([], html, root_path, newpath, filename, title))
 
@@ -347,7 +347,7 @@ def plot_horiz_trend(html_subdirs, path, keys, config, collection):
         chart.draw(data, options);
       }
 	</script>
-	<div id="chart_div_''' + io + '''" style="width: ''' + default_width + '''; height: ''' + default_height + ''';"></div>'''
+	<div id="chart_div_''' + io + '''" style="width: ''' + str(default_width) + '''px; height: ''' + str(default_height) + '''px;"></div>'''
 
 	html_subdirs.append(generate_html([], html, new_path, new_path, title, title))
 
@@ -423,6 +423,13 @@ def plot_samples_raw_fio_data(root_path, key, keys, title, sysinfos):
 					else:
 						mean_y.append(0)
 					vticks.append(io + ' ' + fs)
+					print "HERE: <" + io + " " + fs + ">" + " <" + subtitle + ">"
+
+	nbars = len(vticks)
+	#
+	# normally fit in ~9 bars + some extra 1 bars slack for headings etc
+	#
+	new_height = (nbars + 1) * (default_height / 10)
 
 	html += '''
 	<script type="text/javascript">
@@ -454,7 +461,7 @@ def plot_samples_raw_fio_data(root_path, key, keys, title, sysinfos):
         chart.draw(data, options);
       }
 	</script>
-	<div id="chart_div_hist" style="width: ''' + default_width + '''; height: ''' + default_height + ''';"></div>'''
+	<div id="chart_div_hist" style="width: ''' + str(default_width) + '''px; height: ''' + str(new_height) + '''px;"></div>'''
 
 	#
 	# Now do scatter plot and heat maps
@@ -671,7 +678,6 @@ def graph_stats(html_subdirs, root_path, graph_func, stats_collection, collectio
 							sysinfovals[c] = [sysinfo[c]]
 		sysinfo_fields_vary = []
 		sysinfo_fields_static = []
-
 		for s in sysinfovals:
 			if len(sysinfovals[s]) > 1:
 				if not s in collection_keys:
@@ -964,7 +970,7 @@ def overtime_trends(html_dirs, root_path):
 #
 #  Gather up stats
 #
-dates = [ '2014-07-14' ]
+dates = [ ]
 html_dirs = []
 stats = []
 tmpdir = "/tmp/test"
