@@ -185,7 +185,7 @@ do
 	for fs in ext4 xfs btrfs
 	do
 		echo $fs
-		for opt in s #f h s
+		for opt in s #p
 		do
 			umount $MNT
 			do_fs_new $fs
