@@ -423,7 +423,6 @@ def plot_samples_raw_fio_data(root_path, key, keys, title, sysinfos):
 					else:
 						mean_y.append(0)
 					vticks.append(io + ' ' + fs)
-					print "HERE: <" + io + " " + fs + ">" + " <" + subtitle + ">"
 
 	nbars = len(vticks)
 	#
