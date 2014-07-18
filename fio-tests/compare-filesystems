@@ -30,8 +30,8 @@ import errno
 import textwrap
 import operator
 
-#ubuntu_colors = [ '#f37320', '#f7995b', '#fabb8d' ]
-ubuntu_colors = [ '#ff0000', '#00ff00', '#0000ff' ]
+#default_colors = [ '#f37320', '#f7995b', '#fabb8d' ]
+default_colors = [ '#ff0000', '#00ff00', '#0000ff' ]
 
 job_config_cache = {}
 
@@ -259,7 +259,7 @@ def bar_horiz(html_subdirs, root_path, keys, config, collection):
 		for i in indexes:
 			end = xlabels[i].split()[::-1][0]
 			html += "['" + xlabels[i] + "', " + str(yvalues[i]) + "," + \
-			"'fill-color: " + ubuntu_colors[endlabels.index(end)] + "; " + \
+			"'fill-color: " + default_colors[endlabels.index(end)] + "; " + \
 			"fill-opacity: 0.9'],\n"
 
 		html += "]);\n"
@@ -405,7 +405,7 @@ def moving_average(values, window):
 #
 #  plot samples and heatmaps from raw fio data
 #
-def plot_samples_raw_fio_data(root_path, keys, title, data):
+def plot_samples_raw_fio_data(root_path, key, keys, title, sysinfos):
 	title_keys = ['Job', 'Filesystem', 'Kernel-release']
 
 	html = ""
@@ -413,7 +413,7 @@ def plot_samples_raw_fio_data(root_path, keys, title, data):
 	filesystems = []
 	ioscheds = []
 
-	for (values, sysinfo) in data:
+	for sysinfo in sysinfos:
 		if not sysinfo['Filesystem'] in filesystems:
 			filesystems.append(sysinfo['Filesystem'])
 		if not sysinfo['IO Scheduler'] in ioscheds:
@@ -426,11 +426,12 @@ def plot_samples_raw_fio_data(root_path, keys, title, data):
 	vticks = []
 	for fs in sorted(filesystems):
 		for io in sorted(ioscheds):
-			for (values, sysinfo) in data:
+			for sysinfo in sysinfos:
 				if sysinfo['Filesystem'] == fs and sysinfo['IO Scheduler'] == io:
+					samples = sysinfo['Samples'][key]
 					total_y = 0
 					total_n = 0
-					for (x, y) in values:
+					for (x, y) in samples:
 						total_y += sum(y)
 						total_n += len(y)
 	
@@ -454,7 +455,7 @@ def plot_samples_raw_fio_data(root_path, keys, title, data):
 	for i in range(0, len(mean_y)):
 		fs = vticks[i].split()[::-1][0]
 		html += "['" + vticks[i] + "', " + str(mean_y[i]) + "," + \
-			"'fill-color: " + ubuntu_colors[filesystems.index(fs)] + "; " + \
+			"'fill-color: " + default_colors[filesystems.index(fs)] + "; " + \
 			"fill-opacity: 0.9'],\n"
 
 	html += "]);\n"
@@ -477,13 +478,14 @@ def plot_samples_raw_fio_data(root_path, keys, title, data):
 	#
 	for fs in sorted(filesystems):
 		for io in sorted(ioscheds):
-			for (values, sysinfo) in data:
+			for sysinfo in sysinfos:
 				subtitle = ""
 				for k in title_keys:
 					if not k in keys:
 						subtitle += sysinfo[k] + ", "
 
 				if sysinfo['Filesystem'] == fs and sysinfo['IO Scheduler'] == io:
+					samples = sysinfo['Samples'][key]
 					max_x = 0
 					max_y = 0
 					all_x = []
@@ -493,7 +495,7 @@ def plot_samples_raw_fio_data(root_path, keys, title, data):
 					#  For scatter plot and heatmap we can combine
 					#  it all into one big hunk of data
 					#
-					for (x, y) in values:
+					for (x, y) in samples:
 						all_x += x
 						all_y += y
 
@@ -818,8 +820,6 @@ def samples_load_by_pattern(path, pattern):
 	regex = re.compile(pattern)
 	values = []
 	for l in sorted(os.listdir(path)):
-		x = []
-		y = []
 		for m in [regex.search(l)]:
 			if m:
 				filename = os.path.join(path, l)
@@ -860,27 +860,27 @@ def graph_samples(html_subdirs, root_path, path, key, stats, keys, title):
 	html = ""
 	for job in jobs:
 		print "Graphing " + title + " (" + job + ")"
-		data = []
+		ordered_stats = []
 		titles = []
 		for sysinfo in stats:
 			if sysinfo['Job'] == job:
 				if sysinfo['Samples'] == None:
 					sysinfo['Samples'] = samples_load(sysinfo['Datapath'])
 				samples = sysinfo['Samples']
-				data.append((samples[key], sysinfo))
+				ordered_stats.append(sysinfo)
 				titles.append(sysinfo_keys_to_label(sysinfo, keys))
 		#
 		# Sort based on the chart titles
 		#
 		indexes = np.argsort(titles)
 		titles = [ titles[i] for i in indexes ]
-		data = [ data[i] for i in indexes ]
+		ordered_stats = [ ordered_stats[i] for i in indexes ]
 
 		new_path = os.path.join(path, job)
 		mkdirp(new_path)
 
-		if len(data):
-			html = plot_samples_raw_fio_data(new_path, keys, title, data)
+		if len(ordered_stats):
+			html = plot_samples_raw_fio_data(new_path, key, keys, title, ordered_stats)
 			html_subdirs.append(generate_html([], html, root_path, new_path, job, job))
 		else:
 			print "No relevant data can be found"
