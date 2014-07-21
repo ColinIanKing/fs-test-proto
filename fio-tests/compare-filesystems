@@ -863,8 +863,6 @@ def flamegraph_perf_data(html_subdirs, root_path, path, stats, keys, title):
 
 				os.system(cmd + " " + perffile + " | ../tools/FlameGraph/stackcollapse-perf.pl | ../tools/FlameGraph/flamegraph.pl --minwidth=5 --width=" + str(default_width - 15) + " --title=\"" + titles[i] + "\" > " + flamegraph)
 
-				print "----> ", flamegraphname
-
 				html += "<tr><td><center><iframe src=\"" + flamegraphname
 				html += "\" width=" + str(default_width)
 				html += " height=500 frameborder=0 seamless" + "></center></iframe>"
