@@ -100,9 +100,11 @@ stats()
 {
 	if [ ${SCENARIO} == "perf" ]; then
 		perf record -F ${PERF_FREQ} -g -- ${ROOT_PATH}/perf-wrapper.sh -e BLOCKSIZE=${BLOCKSIZE} -e SIZE=${SIZE} -e DIRECTORY=${DIRECTORY} $FIO $* ${ROOT_PATH}/jobs/${JOB} --output-format=json --output=${RESULTS_PATH}/fio-stats.json
+		gzip --best ${RESULTS_PATH}/perf.data
 	else
 		$FIO $* ${ROOT_PATH}/jobs/${JOB} --output-format=json --output=${RESULTS_PATH}/fio-stats.json
 	fi
+	gzip --best ${RESULTS_PATH}/*.log
 }
 
 
@@ -153,5 +155,4 @@ mkdir -p ${RESULTS_PATH}
 log_job_info
 cd ${RESULTS_PATH}
 stats $newopts
-gzip --best ${RESULTS_PATH}/*.log
 cd ${ROOT_PATH}
