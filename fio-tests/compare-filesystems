@@ -130,6 +130,29 @@ def sysinfo_load(file):
 	return sysinfo
 
 #
+#  Load perf data
+#
+def perf_report_load(file):
+	pattern = re.compile(r"""\s+(\d*\.\d+|\d+)%\s+(\d*\.\d+|\d+)%\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)""", re.VERBOSE)
+
+	if os.path.isfile(file):
+		f = open(file, 'r')
+	elif os.path.isfile(file + '.gz'):
+		f = gzip.open(file + '.gz')
+	else:
+		return []
+
+	perf_report = []
+	for line in f.read().splitlines():
+		m = pattern.match(line)
+		if m:
+			percent = float(m.group(1))
+			func = m.group(6)
+			perf_report.append((func, percent))
+
+	return perf_report
+
+#
 #  Get and cache job configuration data
 #
 def job_config_get(job):
@@ -159,7 +182,7 @@ def job_config_get(job):
 #  Variants of keys?
 #
 def keys_variant_collection(part_stats):
-	skipkeys = [ 'Fiostats', 'Datapath', 'Samples', 'Time-run','Time', 'Kernel-version', 'Full Date']
+	skipkeys = [ 'Perfreport', 'Fiostats', 'Datapath', 'Samples', 'Time-run','Time', 'Kernel-version', 'Full Date']
 	keys = set([])
 	for stats in part_stats:
 		for sysinfo1 in stats:
@@ -450,7 +473,7 @@ def plot_samples_raw_fio_data(root_path, key, keys, title, sysinfos):
         var options = {
           title: 'Mean ''' + title + ''' ',
           vAxis: {title: 'Configuration' },
-          hAxis: {title: 'Mean ''' + title + ''' ', minValue: 0 },
+	  hAxis: {title: 'Mean ''' + title + ''' ', minValue: 0 },
 	  legend: {position: 'none' }
         };
 
@@ -742,6 +765,7 @@ def collect_stats(path):
 
 			sysinfo['Samples'] = None	# Loaded on demand later
 			sysinfo['Datapath'] = datapath
+			sysinfo['Perfreport'] = perf_report_load(os.path.join(datapath, 'perf.report'))
 
 			try:
 				f = open(os.path.join(datapath, 'fio-stats.json'), 'r')
@@ -874,6 +898,109 @@ def flamegraph_perf_data(html_subdirs, root_path, path, stats, keys, title):
 			print "No relevant perf data can be found"
 
 	return html
+
+
+def histogram_perf_report(html_subdirs, root_path, path, stats, keys, title):
+	#
+	# Find all unique jobs
+	#
+	jobs = sorted({ sysinfo['Job'] for sysinfo in stats})
+	filesystems = sorted({ sysinfo['Filesystem'] for sysinfo in stats})
+	ioscheds = sorted({ sysinfo['IO Scheduler'] for sysinfo in stats})
+
+	#
+	# Process data from each unique job:
+	#
+	for job in jobs:
+		#
+		#  Collect up unique perf kernel syms
+		#
+		percents = {}
+		for sysinfo in stats:
+			if sysinfo['Job'] == job:
+				data = sysinfo['Perfreport']
+				for (func, percent) in data:
+					try:
+						percents[func] += percent
+					except:
+						percents[func] = percent
+
+
+		html = ""
+		print "Histogram of " + title + " (" + job + ")"
+		ordered_stats = []
+		titles = []
+
+		pc = {} 
+		chart = 0
+		for sysinfo in stats:
+			for fs in filesystems:
+				for io in ioscheds:
+					tag = fs + ' ' + io
+					if sysinfo['Job'] == job and \
+					   sysinfo['Filesystem'] == fs and \
+					   sysinfo['IO Scheduler'] == io:
+						data = sysinfo['Perfreport']
+						for (func, percent) in data:
+							try:
+								pcs = pc[func]
+							except:
+								pc[func] = {}
+							try:
+								pc[func][tag] += percent
+							except:
+								pc[func][tag] = percent
+
+		new_path = os.path.join(path, job)
+		mkdirp(new_path)
+
+		html += '''
+	<tr><td><center>
+	<script type="text/javascript">
+	google.load("visualization", "1", {packages:["corechart"]});
+	google.setOnLoadCallback(drawChart);
+	function drawChart() {
+        var data = google.visualization.arrayToDataTable([
+	'''
+		txt = "'Function'"
+		for fs in filesystems:
+			for io in ioscheds:
+				txt += ",'" + fs + " " + io + "'"
+
+		html += "[" + txt + "],\n"
+
+		for (key,val) in sorted(percents.items(), key = lambda x: x[1])[::-1]:
+			txt = "'" + key + "'"
+			for fs in filesystems:
+				for io in ioscheds:
+					tag = fs + ' ' + io
+					txt += ", "
+					try:
+						txt += str(pc[key][tag])
+					except:
+						txt += "null"
+			html += "[" + txt + "],\n"
+		html += "]);\n"
+
+		html += '''
+        var options = {
+          title: 'Perf report: total system utilisation',
+	  isStacked: true,
+	  bar: { groupWidth: "95%"},
+	  chartArea: {left:'15%',top:20,width:'70%',height:'95%'},
+	  fontSize: 14,
+        };
+
+        var chart = new google.visualization.BarChart(document.getElementById(''' + "'chart_div_" + str(chart) + "'" + '''));
+        chart.draw(data, options);
+      }
+	</script>
+	<div id="chart_div_''' + str(chart) + '''" style="width: ''' + str(default_width) + '''px; height: ''' + str(len(percents) * 16) + '''px"></div>
+	</td></tr></center>'''
+		html_subdirs.append(generate_html([], html, root_path, new_path, job, job))
+
+	return ""
+
 
 def graph_samples(html_subdirs, root_path, path, key, stats, keys, title):
 	#
@@ -1012,6 +1139,25 @@ def daily_tests_flamegraph(html_dirs, root_path, date):
 	html_dirs.append(generate_html(html_subdirs, "", root_path, new_path, 'flamegraph', "Flamegraph (by test) " + ', '.join(date)))
 
 #
+#  Perf reports of tests on given day
+#
+def daily_tests_perf_report(html_dirs, root_path, date):
+	tests = find_matching_stats(stats,
+		[
+			('Date', date),
+			('Job', []),
+			('Filesystem', []),
+			('Kernel-release', [])
+		])
+	keys = keys_variant_collection([tests])
+	new_path = os.path.join(root_path, 'perfreport')
+	mkdirp(new_path)
+	html_subdirs = []
+	histogram_perf_report(html_subdirs, root_path, new_path, tests, keys, 'perfreport')
+	html_dirs.append(generate_html(html_subdirs, "", root_path, new_path, 'perfreport', "Perf Report (by test) " + ', '.join(date)))
+
+
+#
 #  Plot trends over time
 #
 def overtime_trends(html_dirs, root_path):
@@ -1064,6 +1210,7 @@ for i in range(1, len(sys.argv)):
 
 mkdirp(tmpdir)
 
+daily_tests_perf_report(html_dirs, tmpdir, dates)
 daily_tests_flamegraph(html_dirs, tmpdir, dates)
 daily_tests_histogram(html_dirs, tmpdir, dates)
 daily_tests_samples(html_dirs, tmpdir, dates)
