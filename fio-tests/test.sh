@@ -1,4 +1,4 @@
-#!/bin/bash 
+#!/bin/bash
 
 MEM_TOTAL_K=$(grep MemTotal /proc/meminfo  | awk '{print $2}')
 MIN_FILE_SIZE=$((MEM_TOTAL_K * 2))K
@@ -125,12 +125,16 @@ if [ $UID -ne 0 ]; then
 	exit 1
 fi
 
-while getopts "D:T:d:m:s:" opt; do
+while getopts "D:T:d:m:s:f:" opt; do
 	case $opt in
 	D)
 		DATE_START=$OPTARG
 		;;
-	T)	TIME_START=$OPTARG
+	T)	
+		TIME_START=$OPTARG
+		;;
+	f)	
+		FS=$OPTARG
 		;;
 	d)
 		DEV=$OPTARG
@@ -151,6 +155,11 @@ while getopts "D:T:d:m:s:" opt; do
 		;;
 	esac
 done
+
+if [ -z $FS ]; then
+	echo "FS not defined. Exiting"
+	exit 1
+fi
 
 if [ -z $IOSCHED ]; then
 	echo "IOSCHED is not defined. Exiting"
@@ -182,7 +191,7 @@ ALL_JOBS=$(ls jobs | grep -v conf)
 
 for job in ${ALL_JOBS}
 do
-	for fs in ext4 xfs btrfs
+	for fs in $FS
 	do
 		echo $fs
 		for opt in s #p
