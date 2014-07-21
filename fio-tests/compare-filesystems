@@ -74,7 +74,7 @@ def generate_html(html_subdirs, html, root_path, sub_path, html_file, title):
 
 	for f in sorted(os.listdir(sub_path)):
 		(filename, extension) = os.path.splitext(f)
-		if extension == ".png":
+		if extension in [ ".png" ]:
 			page += '\n <tr><td bgcolor="' + colors[i % 2] + '"><center><img src=' + f + '></center></td></tr>'
 			i += 1
 	page += '''
@@ -420,7 +420,7 @@ def plot_samples_raw_fio_data(root_path, key, keys, title, sysinfos):
 					for (x, y) in samples:
 						total_y += sum(y)
 						total_n += len(y)
-	
+
 					if total_n != 0:
 						mean_y.append(float(total_y) / total_n)
 					else:
@@ -475,6 +475,7 @@ def plot_samples_raw_fio_data(root_path, key, keys, title, sysinfos):
 					samples = sysinfo['Samples'][key]
 					max_x = 0
 					max_y = 0
+					mean_y = 0
 					all_x = []
 					all_y = []
 					#
@@ -486,9 +487,13 @@ def plot_samples_raw_fio_data(root_path, key, keys, title, sysinfos):
 						all_x += x
 						all_y += y
 
-					max_y = max(all_y)
-					max_x = max(all_x)
-					avg_y = moving_average(all_y, len(all_y) / 20)
+					len_all_y = len(all_y)
+					if len_all_y > 0:
+						max_y = max(all_y)
+						avg_y = moving_average(all_y, len(all_y) / 20)
+						mean_y = float(sum(all_y)) / len_all_y
+					if len(all_x) > 0:
+						max_x = max(all_x)
 
 					rows=32
 					cols=64
@@ -510,9 +515,7 @@ def plot_samples_raw_fio_data(root_path, key, keys, title, sysinfos):
 					for k in range(0, tick_interval + 1):
 						hticks.append("{v:" + str(k * float(max_x)/tick_interval) + ", f:'" + str(k * float(max_x)/tick_interval) + "'}")
 
-					n = len(all_y)
-					mean_y = float(sum(all_y)) / n
-					skip = float(n) / float(default_max_plots_in_scatter_plot)
+					skip = float(len_all_y) / float(default_max_plots_in_scatter_plot)
 					if skip > 1:
 						all_x = [ all_x[int(r)] for r in np.arange(0, len(all_x) - 1, skip)]
 						all_y = [ all_y[int(r)] for r in np.arange(0, len(all_y) - 1, skip)]
@@ -814,6 +817,66 @@ def samples_load(path):
 
 	return samples
 
+def flamegraph_perf_data(html_subdirs, root_path, path, stats, keys, title):
+	#
+	# Find all unique jobs
+	#
+	jobs = sorted({ sysinfo['Job'] for sysinfo in stats})
+	#
+	# Process data from each unique job:
+	#
+	html = ""
+	for job in jobs:
+		print "Flamegraphing " + title + " (" + job + ")"
+		ordered_stats = []
+		titles = []
+		for sysinfo in stats:
+			if sysinfo['Job'] == job:
+				ordered_stats.append(sysinfo)
+				titles.append(sysinfo_keys_to_label(sysinfo, keys))
+		#
+		# Sort based on the chart titles
+		#
+		indexes = np.argsort(titles)
+		titles = [ titles[i] for i in indexes ]
+		ordered_stats = [ ordered_stats[i] for i in indexes ]
+
+		new_path = os.path.join(path, job)
+		mkdirp(new_path)
+
+		html = ""
+		if len(ordered_stats):
+			i = 0
+			for sysinfo in ordered_stats:
+				flamegraphname = "flamegraph-" + str(i) + ".svg"
+				flamegraph = os.path.join(new_path, flamegraphname)
+				perffile = os.path.join(sysinfo['Datapath'], 'perf.script')
+				if os.path.isfile(perffile + '.gz'):
+					cmd = "zcat"
+					perffile += ".gz"
+				elif os.path.isfile(perffile):
+					cmd = "cat"
+				else:
+					html += "<tr><td><center>No perf data for " + titles[i] + "</center></td></tr>"
+					i = i + 1
+					continue
+
+				os.system(cmd + " " + perffile + " | ../tools/FlameGraph/stackcollapse-perf.pl | ../tools/FlameGraph/flamegraph.pl --minwidth=5 --width=" + str(default_width - 15) + " --title=\"" + titles[i] + "\" > " + flamegraph)
+
+				print "----> ", flamegraphname
+
+				html += "<tr><td><center><iframe src=\"" + flamegraphname
+				html += "\" width=" + str(default_width)
+				html += " height=500 frameborder=0 seamless" + "></center></iframe>"
+				html += "</tr></td>"
+				i = i + 1
+
+			html_subdirs.append(generate_html([], html, root_path, new_path, job, job))
+		else:
+			print "No relevant perf data can be found"
+
+	return html
+
 def graph_samples(html_subdirs, root_path, path, key, stats, keys, title):
 	#
 	# Find all unique jobs
@@ -892,7 +955,7 @@ def compare_stats_ordered(html_subdirs, path, graph_func, stats, group_by_keys, 
 #  Histogram of fs + tests on a given day
 #
 def daily_tests_histogram(html_dirs, root_path, date):
-	tests = find_matching_stats(stats, 
+	tests = find_matching_stats(stats,
 		[
 			('Date', date),
 			('Job', []),
@@ -933,6 +996,24 @@ def daily_tests_samples(html_dirs, root_path, date):
 		html_dirs.append(generate_html(html_subdirs, "", root_path, new_path, name, title + ": " + ', '.join(date)))
 
 #
+#  Flamegraphs of tests on given day
+#
+def daily_tests_flamegraph(html_dirs, root_path, date):
+	tests = find_matching_stats(stats,
+		[
+			('Date', date),
+			('Job', []),
+			('Filesystem', []),
+			('Kernel-release', [])
+		])
+	keys = keys_variant_collection([tests])
+	new_path = os.path.join(root_path, 'flamegraph')
+	mkdirp(new_path)
+	html_subdirs = []
+	flamegraph_perf_data(html_subdirs, root_path, new_path, tests, keys, 'flamegraph')
+	html_dirs.append(generate_html(html_subdirs, "", root_path, new_path, 'flamegraph', "Flamegraph (by test) " + ', '.join(date)))
+
+#
 #  Plot trends over time
 #
 def overtime_trends(html_dirs, root_path):
@@ -957,7 +1038,7 @@ def overtime_trends(html_dirs, root_path):
 		print "Generating trends for job " + job
 		job_path = os.path.join(new_path, job)
 		mkdirp(job_path)
-		tests = find_matching_stats(stats, 
+		tests = find_matching_stats(stats,
 			[
 				('Date', date),
 				('Job', [job]),
@@ -985,8 +1066,10 @@ for i in range(1, len(sys.argv)):
 
 mkdirp(tmpdir)
 
+daily_tests_flamegraph(html_dirs, tmpdir, dates)
 daily_tests_histogram(html_dirs, tmpdir, dates)
 daily_tests_samples(html_dirs, tmpdir, dates)
 overtime_trends(html_dirs, tmpdir)
+
 
 generate_html(html_dirs, "", tmpdir, tmpdir, 'results', 'All results')
