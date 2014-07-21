@@ -161,6 +161,8 @@ if [ -z $FS ]; then
 	exit 1
 fi
 
+FS=$(echo $FS | tr ',' ' ')
+
 if [ -z $IOSCHED ]; then
 	echo "IOSCHED is not defined. Exiting"
 	exit 1
