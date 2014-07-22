@@ -95,10 +95,10 @@ def generate_html(html_subdirs, html, root_path, sub_path, html_file, title):
 #
 samples_info = [
 	#  key		human readable title			regex on log name	generated filename path
-	('Bandwidth',	'Bandwidth KB per second',	'job.*_bw\.log*', 	'daily-fio-stats-bandwidth'),
-	('IOops',	'I/O ops per second', 		'job.*_iops\.log*', 	'daily-fio-stats-io-ops'),
-	('IOLatency',	'I/O Latency (us)', 		'job.*_lat\.log*', 	'daily-fio-stats-io-latency'),
-	('IOCLatencty',	'I/O Completion Latency (us)',	'job.*_clat\.log*', 	'daily-fio-stats-clatency') ]
+	('Bandwidth',	'Fio I/O Bandwidth (MB/s)',		'job.*_bw\.log*', 	'daily-fio-stats-bandwidth'),
+	('IOops',	'Fio I/O operations (ops/s)', 		'job.*_iops\.log*', 	'daily-fio-stats-io-ops'),
+	('IOLatency',	'Fio I/O Latency (us)', 		'job.*_lat\.log*', 	'daily-fio-stats-io-latency'),
+	('IOCLatencty',	'Fio I/O Completion Latency (us)',	'job.*_clat\.log*', 	'daily-fio-stats-clatency') ]
 
 #
 #  Create all dirs in a given path
@@ -161,7 +161,10 @@ def job_config_get(job):
 	if job in job_config_cache:
 		return job_config_cache[job]
 	else:
-		f = open(os.path.join('jobs', job + '.conf'), 'r')
+		try:
+			f = open(os.path.join('jobs', job + '.conf'), 'r')
+		except:
+			return []
 		for line in f.read().splitlines():
 			if line[:1] == '#':
 				continue
@@ -373,6 +376,120 @@ def plot_horiz_trend(html_subdirs, path, keys, config, collection):
 	<div id="chart_div_''' + io + '''" style="width: ''' + str(default_width) + '''px; height: ''' + str(default_height) + '''px;"></div>'''
 
 	html_subdirs.append(generate_html([], html, new_path, new_path, title, title))
+
+#
+#  trend line graph plot for perf stats
+#
+def plot_perf_horiz_trend(html_subdirs, job, path, sysinfos):
+	#
+	# Determine all the xlabels in the collection
+	# and collect up unique filesystems and ioscheds
+	#
+	filesystems = set([])
+	ioscheds = set([])
+	all_xlabels = set([])
+	for sysinfo in sysinfos:
+		all_xlabels.add(sysinfo['Date'] + " " + sysinfo['Kernel-release'])
+		filesystems.add(sysinfo['Filesystem'])
+		ioscheds.add(sysinfo['IO Scheduler'])
+
+	all_xlabels = sorted(all_xlabels)
+	ioscheds = sorted(ioscheds)
+	filesystems = sorted(filesystems)
+
+	new_path = os.path.join(path, str_to_filename(job))
+	mkdirp(new_path)
+
+	html = ""
+	#
+	# Collect symbols and get ranking order
+	#
+	percents = {}
+	for sysinfo in sysinfos:
+		data = sysinfo['Perfreport']
+		for (address, percent) in data:
+			if address[0:1] != "0":
+				try:
+					percents[address] += percent
+				except:
+					percents[address] = percent
+
+	#
+	# Now produce a char for each symbol(!)
+	#
+	for (symbol, val) in sorted(percents.items(), key = lambda x: x[1])[::-1][:100]:
+		html += '''
+		<script type="text/javascript">
+		google.load("visualization", "1", {packages:["corechart"]});
+		google.setOnLoadCallback(drawChart);
+		function drawChart() {
+		var data = google.visualization.arrayToDataTable([
+		'''
+		#
+		# Define all headings (we may not use all the columns)
+		#
+		row = [ "'Run #'" ]
+		for io in ioscheds:
+			for fs in filesystems:
+				row.append("'" + io + " " + fs + "'")
+		rows = [ row ]
+
+		#
+		#  This is ugly and inefficient, it needs optimising, but
+		#  for now, it will do
+		#
+		cols = set()
+		for xl in all_xlabels:
+			i = 0
+			row = [ "'" + xl + "'" ]
+			cols.add(i)
+			allnull = True
+			for io in ioscheds:
+				for fs in filesystems:
+					i += 1
+					val = "null"
+					for sysinfo in sysinfos:
+						if sysinfo['Date'] + " " + sysinfo['Kernel-release'] == xl and \
+						   sysinfo['Filesystem'] == fs and \
+						   sysinfo['IO Scheduler'] == io:
+							for (address, percent) in sysinfo['Perfreport']:
+								if address == symbol:
+									val = str(percent)
+									allnull = False
+									cols.add(i)
+									break
+					row.append(val)
+			if not allnull:
+				rows.append(row)
+
+		cols = list(cols)
+		#
+		#  Got to ensure we don't emit columns that are all
+		#  null, so only push out a column if numcols[i] is defined
+		#
+		txt = ""
+		for row in rows:
+			html += "[" + ','.join([ row[i] for i in cols]) + "],\n"
+		html += "]);\n"
+
+		html += '''
+        var options = {
+          title: ' ''' + job + " (" + symbol + ") " + ''' ',
+          hAxis: {title: 'Run #' },
+          vAxis: {title: ' total CPU utilisation % ', minValue: 0  },
+	  interpolateNulls: true,
+	  pointShape: 'diamond',
+          isNull: true,
+	  pointSize: 4
+        };
+
+        var chart = new google.visualization.AreaChart(document.getElementById(''' + "'chart_div_" + symbol + "'" + '''));
+        chart.draw(data, options);
+      }
+	</script>
+	<div id="chart_div_''' + symbol + '''" style="width: ''' + str(default_width) + '''px; height: ''' + str(default_height) + '''px;"></div>'''
+
+	html_subdirs.append(generate_html([], html, new_path, new_path, job, job))
 
 #
 #  Calculate heatmap colors
@@ -745,7 +862,7 @@ def graph_stats(html_subdirs, root_path, graph_func, stats_collection, collectio
 				for f in collection_keys:
 					xlabel.append(sysinfo[f])
 			#
-			# Add them to the subplot collection
+			# Add them to the collection
 			#
 			if len(xlabels) > 0:
 				collection.append((array_to_str(subtitle), xlabels, yvalues, array_to_str(xlabel), sysinfos))
@@ -804,7 +921,7 @@ def find_unique_key_value_stats(stats, criteria, key):
 		if not sysinfo[key] in values:
 			values.append(sysinfo[key])
 
-	print "Found %d unique stats" % len(values)
+	#print "Found %d unique stats" % len(values)
 	return values
 
 #
@@ -931,7 +1048,7 @@ def histogram_perf_report(html_subdirs, root_path, path, stats, keys, title, sym
 		ordered_stats = []
 		titles = []
 
-		pc = {} 
+		pc = {}
 		chart = 0
 		for sysinfo in stats:
 			for fs in filesystems:
@@ -984,7 +1101,7 @@ def histogram_perf_report(html_subdirs, root_path, path, stats, keys, title, sym
 		html += "]);\n"
 		html += '''
         var options = {
-          title: 'Perf report: total system utilisation',
+          title: 'Perf Report: total system utilisation',
 	  isStacked: true,
 	  bar: { groupWidth: "95%"},
 	  chartArea: {left:'15%',top:20,width:'70%',height:'95%'},
@@ -1096,7 +1213,7 @@ def daily_tests_histogram(html_dirs, root_path, date):
 	html_subdirs = []
 	compare_stats_ordered(html_subdirs, newpath, bar_horiz, tests,
 		['IO Scheduler', 'Job', 'Filesystem', 'Date' ], ['Job'])
-	html_dirs.append(generate_html(html_subdirs, "", root_path, newpath, 'daily-tests-histogram', 'Fio Test Metrics (by metric) ' + ', '.join(date)))
+	html_dirs.append(generate_html(html_subdirs, "", root_path, newpath, 'daily-tests-histogram', 'Fio metrics (across tests)' + ', '.join(date)))
 
 #
 #  Samples of fs on a given day
@@ -1136,7 +1253,7 @@ def daily_tests_flamegraph(html_dirs, root_path, date):
 	mkdirp(new_path)
 	html_subdirs = []
 	flamegraph_perf_data(html_subdirs, root_path, new_path, tests, keys, 'flamegraph')
-	html_dirs.append(generate_html(html_subdirs, "", root_path, new_path, 'flamegraph', "Flamegraph (by test) " + ', '.join(date)))
+	html_dirs.append(generate_html(html_subdirs, "", root_path, new_path, 'flamegraph', "Perf flamegraph (by test) " + ', '.join(date)))
 
 #
 #  Perf reports of tests on given day, all symbols
@@ -1216,8 +1333,43 @@ def overtime_trends(html_dirs, root_path):
 			[ 'Job', 'Filesystem', 'IO Scheduler', 'Kernel-release'], ['Filesystem', 'IO Scheduler', 'Job'])
 		html_subdirs.append(generate_html(html_jobsubdirs, "", new_path, job_path, 'overtime-trends', job + ": " + 'trends over time'))
 
-	html_dirs.append(generate_html(html_subdirs, "", root_path, new_path, 'overtime-trends', 'All trends over time'))
+	html_dirs.append(generate_html(html_subdirs, "", root_path, new_path, 'overtime-trends', 'Fio metrics: all trends over time'))
 
+#
+#  Plot perf trends over time
+#
+def overtime_perf_trends(html_dirs, root_path):
+	new_path = os.path.join(root_path, 'overtime-perf-trends')
+	mkdirp(new_path)
+
+	kernel_release = []
+	file_systems = []
+	date = []
+
+	jobs = find_unique_key_value_stats(stats,
+		[
+			('Date', date),
+			('Job', []),
+			('Filesystem', file_systems),
+			('Kernel-release', kernel_release)
+		], 'Job')
+
+	html_subdirs = []
+	for job in jobs:
+		html_jobsubdirs = []
+		print "Generating trends for job " + job
+		job_path = os.path.join(new_path, job)
+		mkdirp(job_path)
+		tests = find_matching_stats(stats,
+			[
+				('Date', date),
+				('Job', [job]),
+				('Filesystem', file_systems),
+				('Kernel-release', kernel_release )
+			])
+		plot_perf_horiz_trend(html_subdirs, job, new_path, tests)
+
+	html_dirs.append(generate_html(html_subdirs, "", root_path, new_path, 'overtime-trends', 'Perf trends over time (top 100 kernel symbols)'))
 #
 #  Gather up stats
 #
@@ -1233,13 +1385,13 @@ for i in range(1, len(sys.argv)):
 
 mkdirp(tmpdir)
 
-daily_tests_perf_report(html_dirs, tmpdir, dates)
+#daily_tests_perf_report(html_dirs, tmpdir, dates)
 daily_tests_perf_report_reduced(html_dirs, tmpdir, dates)
-#overtime_perf_trends(html_dirs, tmpdir)
 daily_tests_flamegraph(html_dirs, tmpdir, dates)
 daily_tests_histogram(html_dirs, tmpdir, dates)
 daily_tests_samples(html_dirs, tmpdir, dates)
 overtime_trends(html_dirs, tmpdir)
+overtime_perf_trends(html_dirs, tmpdir)
 
 
 generate_html(html_dirs, "", tmpdir, tmpdir, 'results', 'All results')
