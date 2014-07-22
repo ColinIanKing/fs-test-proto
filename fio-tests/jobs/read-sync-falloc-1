@@ -8,6 +8,7 @@ size=${SIZE}
 filesize=${SIZE}
 nrfiles=1
 group_reporting
+exec_prerun=echo 3 > /proc/sys/vm/drop_caches
 
 # Run falloc and punch_hole threads in parallel
 # After activity file will be highly fragmented
