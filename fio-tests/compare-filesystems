@@ -147,8 +147,8 @@ def perf_report_load(file):
 		m = pattern.match(line)
 		if m:
 			percent = float(m.group(1))
-			func = m.group(6)
-			perf_report.append((func, percent))
+			address = m.group(6)
+			perf_report.append((address, percent))
 
 	return perf_report
 
@@ -900,7 +900,7 @@ def flamegraph_perf_data(html_subdirs, root_path, path, stats, keys, title):
 	return html
 
 
-def histogram_perf_report(html_subdirs, root_path, path, stats, keys, title):
+def histogram_perf_report(html_subdirs, root_path, path, stats, keys, title, symbols, threshold):
 	#
 	# Find all unique jobs
 	#
@@ -919,12 +919,12 @@ def histogram_perf_report(html_subdirs, root_path, path, stats, keys, title):
 		for sysinfo in stats:
 			if sysinfo['Job'] == job:
 				data = sysinfo['Perfreport']
-				for (func, percent) in data:
-					try:
-						percents[func] += percent
-					except:
-						percents[func] = percent
-
+				for (address, percent) in data:
+					if symbols == [] or address in symbols:
+						try:
+							percents[address] += percent
+						except:
+							percents[address] = percent
 
 		html = ""
 		print "Histogram of " + title + " (" + job + ")"
@@ -941,15 +941,16 @@ def histogram_perf_report(html_subdirs, root_path, path, stats, keys, title):
 					   sysinfo['Filesystem'] == fs and \
 					   sysinfo['IO Scheduler'] == io:
 						data = sysinfo['Perfreport']
-						for (func, percent) in data:
-							try:
-								pcs = pc[func]
-							except:
-								pc[func] = {}
-							try:
-								pc[func][tag] += percent
-							except:
-								pc[func][tag] = percent
+						for (address, percent) in data:
+							if symbols == [] or address in symbols:
+								try:
+									pcs = pc[address]
+								except:
+									pc[address] = {}
+								try:
+									pc[address][tag] += percent
+								except:
+									pc[address][tag] = percent
 
 		new_path = os.path.join(path, job)
 		mkdirp(new_path)
@@ -962,14 +963,14 @@ def histogram_perf_report(html_subdirs, root_path, path, stats, keys, title):
 	function drawChart() {
         var data = google.visualization.arrayToDataTable([
 	'''
-		txt = "'Function'"
+		txt = "'Symbol/Address'"
 		for fs in filesystems:
 			for io in ioscheds:
 				txt += ",'" + fs + " " + io + "'"
 
 		html += "[" + txt + "],\n"
 
-		for (key,val) in sorted(percents.items(), key = lambda x: x[1])[::-1]:
+		for (key,val) in sorted(percents.items(), key = lambda x: x[1])[::-1][:threshold]:
 			txt = "'" + key + "'"
 			for fs in filesystems:
 				for io in ioscheds:
@@ -981,7 +982,6 @@ def histogram_perf_report(html_subdirs, root_path, path, stats, keys, title):
 						txt += "null"
 			html += "[" + txt + "],\n"
 		html += "]);\n"
-
 		html += '''
         var options = {
           title: 'Perf report: total system utilisation',
@@ -995,7 +995,7 @@ def histogram_perf_report(html_subdirs, root_path, path, stats, keys, title):
         chart.draw(data, options);
       }
 	</script>
-	<div id="chart_div_''' + str(chart) + '''" style="width: ''' + str(default_width) + '''px; height: ''' + str(len(percents) * 16) + '''px"></div>
+	<div id="chart_div_''' + str(chart) + '''" style="width: ''' + str(default_width) + '''px; height: ''' + str(min(len(percents), threshold) * 16) + '''px"></div>
 	</td></tr></center>'''
 		html_subdirs.append(generate_html([], html, root_path, new_path, job, job))
 
@@ -1139,7 +1139,7 @@ def daily_tests_flamegraph(html_dirs, root_path, date):
 	html_dirs.append(generate_html(html_subdirs, "", root_path, new_path, 'flamegraph', "Flamegraph (by test) " + ', '.join(date)))
 
 #
-#  Perf reports of tests on given day
+#  Perf reports of tests on given day, all symbols
 #
 def daily_tests_perf_report(html_dirs, root_path, date):
 	tests = find_matching_stats(stats,
@@ -1153,8 +1153,31 @@ def daily_tests_perf_report(html_dirs, root_path, date):
 	new_path = os.path.join(root_path, 'perfreport')
 	mkdirp(new_path)
 	html_subdirs = []
-	histogram_perf_report(html_subdirs, root_path, new_path, tests, keys, 'perfreport')
-	html_dirs.append(generate_html(html_subdirs, "", root_path, new_path, 'perfreport', "Perf Report (by test) " + ', '.join(date)))
+	histogram_perf_report(html_subdirs, root_path, new_path, tests, keys, 'perfreport', [], 100000)
+	html_dirs.append(generate_html(html_subdirs, "", root_path, new_path, 'perfreport', "Perf Report (all symbols) (by test) " + ', '.join(date)))
+
+#
+#  Perf reports of tests on given day, reduced symbols
+#
+def daily_tests_perf_report_reduced(html_dirs, root_path, date):
+	tests = find_matching_stats(stats,
+		[
+			('Date', date),
+			('Job', []),
+			('Filesystem', []),
+			('Kernel-release', [])
+		])
+
+	f = open('symbols-perf-histogram.txt', 'r')
+	symbols = f.read().splitlines()
+	f.close()
+
+	keys = keys_variant_collection([tests])
+	new_path = os.path.join(root_path, 'perfreport-reduced')
+	mkdirp(new_path)
+	html_subdirs = []
+	histogram_perf_report(html_subdirs, root_path, new_path, tests, keys, 'perfreport-reduced', symbols, 100)
+	html_dirs.append(generate_html(html_subdirs, "", root_path, new_path, 'perfreport-reduced', "Perf Report (reduced symbols, top 100) (by test) " + ', '.join(date)))
 
 
 #
@@ -1211,10 +1234,11 @@ for i in range(1, len(sys.argv)):
 mkdirp(tmpdir)
 
 daily_tests_perf_report(html_dirs, tmpdir, dates)
-daily_tests_flamegraph(html_dirs, tmpdir, dates)
-daily_tests_histogram(html_dirs, tmpdir, dates)
-daily_tests_samples(html_dirs, tmpdir, dates)
-overtime_trends(html_dirs, tmpdir)
+daily_tests_perf_report_reduced(html_dirs, tmpdir, dates)
+#daily_tests_flamegraph(html_dirs, tmpdir, dates)
+#daily_tests_histogram(html_dirs, tmpdir, dates)
+#daily_tests_samples(html_dirs, tmpdir, dates)
+#overtime_trends(html_dirs, tmpdir)
 
 
 generate_html(html_dirs, "", tmpdir, tmpdir, 'results', 'All results')
