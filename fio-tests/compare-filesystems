@@ -1235,10 +1235,11 @@ mkdirp(tmpdir)
 
 daily_tests_perf_report(html_dirs, tmpdir, dates)
 daily_tests_perf_report_reduced(html_dirs, tmpdir, dates)
-#daily_tests_flamegraph(html_dirs, tmpdir, dates)
-#daily_tests_histogram(html_dirs, tmpdir, dates)
-#daily_tests_samples(html_dirs, tmpdir, dates)
-#overtime_trends(html_dirs, tmpdir)
+#overtime_perf_trends(html_dirs, tmpdir)
+daily_tests_flamegraph(html_dirs, tmpdir, dates)
+daily_tests_histogram(html_dirs, tmpdir, dates)
+daily_tests_samples(html_dirs, tmpdir, dates)
+overtime_trends(html_dirs, tmpdir)
 
 
 generate_html(html_dirs, "", tmpdir, tmpdir, 'results', 'All results')
