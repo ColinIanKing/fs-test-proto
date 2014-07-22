@@ -1,7 +1,7 @@
 # This job file tries to mimic the Intel IOMeter File Server Access Pattern
 # derived from fio example iometer-file-access-server.fio
 [global]
-description=Emulation of Intel IOmeter File Server Access Pattern
+description=Emulation of Intel IOmeter File Server Access Pattern, Moderate
 #blocksize=${BLOCKSIZE}
 directory=${DIRECTORY}
 size=${SIZE}

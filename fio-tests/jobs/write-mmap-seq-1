@@ -1,6 +1,6 @@
 [global]
-name=write-sync-seq-2-thread
-description=sequential synchronous write
+name=write-map-seq-1-thread
+description=sequential mmap write
 rw=write
 blocksize=${BLOCKSIZE}
 directory=${DIRECTORY}
@@ -15,13 +15,9 @@ mem_align=1
 group_reporting=1
 log_avg_msec=250
 runtime=${RUNTIME}
+ioengine=mmap
 
 [job1]
 write_bw_log=job1
 write_lat_log=job1
 write_iops_log=job1
-
-[job2]
-write_bw_log=job2
-write_lat_log=job2
-write_iops_log=job2

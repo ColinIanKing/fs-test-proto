@@ -1,5 +1,5 @@
 [global]
-name=read-sync-seq-1-thread
+name=read-sync-rand-1-thread
 description=random synchronous read
 rw=randread
 blocksize=${BLOCKSIZE}

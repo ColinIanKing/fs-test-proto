@@ -1,7 +1,7 @@
 [global]
-name=read-sync-seq-1-thread
-description=sequential synchronous read
-rw=read
+name=read-write-libaio-seq-1-thread
+description=sequential read and write async libaio
+rw=readwrite
 blocksize=${BLOCKSIZE}
 directory=${DIRECTORY}
 size=${SIZE}
@@ -15,6 +15,7 @@ mem_align=1
 group_reporting=1
 log_avg_msec=250
 runtime=${RUNTIME}
+ioengine=libaio
 
 [job1]
 write_bw_log=job1

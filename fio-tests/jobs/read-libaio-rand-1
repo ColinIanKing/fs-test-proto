@@ -1,7 +1,7 @@
 [global]
-name=read-write-sync-1-thread
-description=read and write async libaio
-rw=readwrite
+name=read-libaio-rand-1-thread
+description=random read async libaio
+rw=randread
 blocksize=${BLOCKSIZE}
 directory=${DIRECTORY}
 size=${SIZE}
@@ -13,9 +13,9 @@ clat_percentiles=1
 disk_util=1
 mem_align=1
 group_reporting=1
-ioengine=libaio
 log_avg_msec=250
 runtime=${RUNTIME}
+ioengine=libaio
 
 [job1]
 write_bw_log=job1
