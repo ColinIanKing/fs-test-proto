@@ -14,6 +14,9 @@ nrfiles=1
 ioengine=libaio
 time_based
 exec_prerun=echo 3 > /proc/sys/vm/drop_caches
+write_bw_log=job1
+write_lat_log=job1
+write_iops_log=job1
 
 [seq-write]
 rw=write
@@ -27,6 +30,9 @@ numjobs=1
 nrfiles=1
 ioengine=libaio
 time_based
+write_bw_log=job2
+write_lat_log=job2
+write_iops_log=job2
 
 [random-read]
 rw=randread
@@ -41,6 +47,9 @@ nrfiles=1
 ioengine=libaio
 time_based
 thinktime=1000
+write_bw_log=job3
+write_lat_log=job3
+write_iops_log=job3
 
 [random-write]
 rw=randwrite
@@ -55,6 +64,9 @@ nrfiles=1
 ioengine=libaio
 time_based
 thinktime=2000
+write_bw_log=job4
+write_lat_log=job4
+write_iops_log=job4
 
 [read-write]
 rw=rw
@@ -69,3 +81,6 @@ numjobs=8
 nrfiles=1
 ioengine=libaio
 time_based
+write_bw_log=job5
+write_lat_log=job5
+write_iops_log=job5
