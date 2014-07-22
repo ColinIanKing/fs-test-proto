@@ -16,6 +16,7 @@ group_reporting=1
 log_avg_msec=250
 runtime=${RUNTIME}
 ioengine=mmap
+exec_prerun=echo 3 > /proc/sys/vm/drop_caches
 
 [job1]
 write_bw_log=job1
