@@ -119,9 +119,10 @@ while [ ! -z $1 ]
 do
 	case $1 in
 	-F)
-		FIO=$OPTARG
+		shift
+		FIO=$1
 		;;
-	-p)
+	-P)
 		echo "Perf"
 		SCENARIO=perf
 		if [ $UID != 0 ]; then
@@ -129,15 +130,17 @@ do
 			exit 1
 		fi
 		;;
-	-s)
+	-S)
 		echo "Stats"
 		SCENARIO=stats
 		;;
 	-j)
-		JOB=$OPTARG
+		shift
+		JOB=$1
 		;;
 	-l)
-		LOG_AVG_MSEC=$OPTARG
+		shift
+		LOG_AVG_MSEC=$1
 		;;
 	*)
 		newopts="$newopts $1"
