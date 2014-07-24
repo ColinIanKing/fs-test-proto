@@ -51,6 +51,10 @@ BLOCKSIZE=${BLOCKSIZE:-4K}
 # No fio log average msec setting, default to 1000ms
 #
 LOG_AVG_MSEC=${LOG_AVG_MSEC:-1000}
+# 
+# No runtime, default to 900 secomds
+#
+RUNTIME=${RUNTIME:-900}
 
 #
 # Dump info about the system we are running the test on
@@ -84,6 +88,7 @@ fs_info() {
 	echo "Mount Opts:     $MOUNT_OPTS"
 	echo "IO Scheduler:   $IOSCHED"
 	echo "Log Avg msec:   $LOG_AVG_MSEC"
+	echo "Runtime:        $RUNTIME"
 }
 
 #
@@ -104,7 +109,7 @@ log_job_info()
 stats()
 {
 	if [ ${SCENARIO} == "perf" ]; then
-		perf record -F ${PERF_FREQ} -g -- ${ROOT_PATH}/perf-wrapper.sh -e LOG_AVG_MSEC=${LOG_AVG_MSEC} -e BLOCKSIZE=${BLOCKSIZE} -e SIZE=${SIZE} -e DIRECTORY=${DIRECTORY} $FIO $* ${ROOT_PATH}/jobs/${JOB} --output-format=json --output=${RESULTS_PATH}/fio-stats.json
+		perf record -F ${PERF_FREQ} -g -- ${ROOT_PATH}/perf-wrapper.sh -e RUNTIME=${RUNTIME} -e LOG_AVG_MSEC=${LOG_AVG_MSEC} -e BLOCKSIZE=${BLOCKSIZE} -e SIZE=${SIZE} -e DIRECTORY=${DIRECTORY} $FIO $* ${ROOT_PATH}/jobs/${JOB} --output-format=json --output=${RESULTS_PATH}/fio-stats.json
 		perf report -i ${RESULTS_PATH}/perf.data > ${RESULTS_PATH}/perf.report
 		perf script -i ${RESULTS_PATH}/perf.data > ${RESULTS_PATH}/perf.script
 		gzip --best ${RESULTS_PATH}/perf.data ${RESULTS_PATH}/perf.report ${RESULTS_PATH}/perf.script
@@ -142,6 +147,11 @@ do
 		shift
 		LOG_AVG_MSEC=$1
 		;;
+	-r)
+		shift
+		RUNTKME=$1
+		;;
+		
 	*)
 		newopts="$newopts $1"
 	;;
