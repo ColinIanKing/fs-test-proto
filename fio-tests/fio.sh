@@ -47,6 +47,10 @@ SIZE=${SIZE:-${MEM_TOTAL_DOUBLE_KB}K}
 # No blocksize, default to 4K
 #
 BLOCKSIZE=${BLOCKSIZE:-4K}
+#
+# No fio log average msec setting, default to 1000ms
+#
+LOG_AVG_MSEC=${LOG_AVG_MSEC:-1000}
 
 #
 # Dump info about the system we are running the test on
@@ -79,6 +83,7 @@ fs_info() {
 	echo "Device:         $DEVICE"
 	echo "Mount Opts:     $MOUNT_OPTS"
 	echo "IO Scheduler:   $IOSCHED"
+	echo "Log Avg msec:   $LOG_AVG_MSEC"
 }
 
 #
@@ -129,8 +134,10 @@ do
 		SCENARIO=stats
 		;;
 	-j)
-		shift
-		JOB=$1
+		JOB=$OPTARG
+		;;
+	-l)
+		LOG_AVG_MSEC=$OPTARG
 		;;
 	*)
 		newopts="$newopts $1"

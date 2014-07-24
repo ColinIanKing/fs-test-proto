@@ -40,6 +40,7 @@ direct=0
 rw=read
 bs=64k
 filename=fragmented_file
+log_avg_msec=${LOG_AVG_MSEC}
 write_bw_log=job1
 write_lat_log=job1
 write_iops_log=job1

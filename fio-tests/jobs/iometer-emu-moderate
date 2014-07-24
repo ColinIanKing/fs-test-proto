@@ -21,6 +21,7 @@ ioengine=libaio
 # iodepth=64    Moderate
 # iodepth=256   Heavy
 iodepth=64
+log_avg_msec=${LOG_AVG_MSEC}
 write_bw_log=job1
 write_lat_log=job1
 write_iops_log=job1
