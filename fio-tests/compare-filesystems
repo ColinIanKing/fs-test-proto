@@ -116,6 +116,7 @@ def mkdirp(path):
 #
 def sysinfo_load(file):
 	sysinfo = {}
+	pattern = re.compile(r"""(\d*).(\d*).(\d*)-(\d*)-(\S*)""", re.VERBOSE)
 
 	if os.path.isfile(file):
 		f = open(file, 'r')
@@ -133,6 +134,16 @@ def sysinfo_load(file):
 			if key in ["Processor", "Hardware"] and val == "unknown":
 				val = "x86_64"
 			sysinfo[key] = val
+			#
+			# Convert kernel release into something that
+			# can be easily sorted into order
+			#
+			if key == 'Kernel-release':
+				m = pattern.match(val)
+        			if m:
+					sysinfo['Kernel-release-canonical'] = \
+						"%4.4d.%4.4d.%4.4d-%4.4d-%s" \
+						% (int(m.group(1)), int(m.group(2)), int(m.group(3)), int(m.group(4)), m.group(5))
 	f.close()
 	return sysinfo
 
@@ -256,25 +267,33 @@ def bar_horiz(html_subdirs, root_path, keys, config, collection):
 	#  Sort collection on xlabel
 	#
 	collection = sorted(collection, key=lambda d: d[3])
-	#
-	#  Collect up end labels, see how many there are and
-	#  this allows us to determine how to color the bars
-	#
-	endlabels = set([])
-	label_width = 0
+
+	max_label_len = 0
+	fs = set([])
+	labels = {}
 	for (subtitle, xlabels, yvalues, xlabel, sysinfos) in collection:
-		endlabels = endlabels.union({ l.split()[::-1][0] for l in xlabels })
-	endlabels = sorted(endlabels)
+		#
+		#  Collect up unique filesystems;
+		#  this allows us to determine how to color the bars
+		#
+		fs = fs.union({ sysinfo['Filesystem'] for sysinfo in sysinfos})
+		#
+		# get label and find longest one
+		#
+		max_label_len = max(max_label_len, max([ len( \
+			sysinfo['Kernel-release'] + ", " + \
+		        sysinfo['IO Scheduler'] + ", " + \
+			sysinfo['Filesystem']) for sysinfo in sysinfos ]))
+	fs = sorted(fs)
 
 	html = ""
 	chart = 0
-	for c in collection:
-		(subtitle, xlabels, yvalues, xlabel, sysinfos) = c
-		xvalues = [ xlabels.index(x) for x in xlabels ]
+	for (subtitle, xlabels, yvalues, xlabel, sysinfos) in collection:
 		#
-		#  And sort values in x order (sigh)
+		# sort by kernel and file system order
 		#
-		indexes = np.argsort(xlabels)[::-1]
+		indexes = sorted(range(len(sysinfos)), key=lambda x : sysinfos[x]['Kernel-release-canonical'] + sysinfos[x]['Filesystem'])
+		#indexes = sorted(range(len(sysinfos)), key=lambda x : sysinfos[x]['Filesystem'] + sysinfos[x]['Kernel-release-canonical'])
 
 		html += '''
 	<script type="text/javascript">
@@ -286,24 +305,24 @@ def bar_horiz(html_subdirs, root_path, keys, config, collection):
 		html += "['Configuration', '" + title + " (" + units + ")'," + \
 			" { role: 'style' }],\n"
 
+		max_height = 40 * len(indexes) + 8
 		for i in indexes:
-			end = xlabels[i].split()[::-1][0]
-			html += "['" + xlabels[i] + "', " + str(yvalues[i]) + "," + \
-			"'fill-color: " + default_colors[endlabels.index(end)] + "; " + \
+			color = default_colors[fs.index(sysinfos[i]['Filesystem'])]
+			label = sysinfos[i]['Kernel-release'] + ", " + \
+				sysinfos[i]['IO Scheduler'] + ", " + \
+				sysinfos[i]['Filesystem']
+			html += "['" + label + "'," + str(yvalues[i]) + "," + \
+			"'fill-color: " + color + "; " + \
 			"fill-opacity: 0.9'],\n"
 
 		html += "]);\n"
-
-		max_label_len = max([ len(x) for x in xlabels ])
-		max_height = 28 * len(xlabels) + 8
-
 		html += '''
 
         var options = {
           title: ' ''' + xlabel + ": " + title + " (" + units + ") " + subtitle + ''' ',
           vAxis: {title: 'Configuration' },
           hAxis: {title: ' ''' + title + " (" + units + ")" + ''' ', minValue: 0 },
-	  chartArea: {left: ' ''' + str(12 * max_label_len) + ''' '},
+	  chartArea: {left: ' ''' + str(10 * max_label_len) + ''' '},
 	  bar: {groupWidth: '90%'} ,
 	  legend: {position: 'none' }
         };
@@ -811,8 +830,8 @@ def graph_stats(html_subdirs, root_path, graph_func, stats_collection, collectio
 	#  The following are config values that we may be
 	#  interested in labelling
 	#
-	sysinfokeys = [ 'Blocksize', 'Filesystem', 'Device', 'Hardware',
-		       	'Job', 'Kernel-release', 'Date', 'Filesize', 'Processor', 'IO Scheduler' ]
+	sysinfokeys = [ 'Blocksize', 'Device', 'Hardware',
+		       	'Job', 'Kernel-release', 'Date', 'Filesize', 'Processor', 'Filesystem', 'IO Scheduler' ]
 	#
 	#   gather the data
 	#
@@ -1228,7 +1247,7 @@ def daily_tests_barchart(html_dirs, root_path, date):
 	mkdirp(newpath)
 	html_subdirs = []
 	compare_stats_ordered(html_subdirs, newpath, bar_horiz, tests,
-		['IO Scheduler', 'Job', 'Filesystem', ], ['Job'])
+		['IO Scheduler', 'Job', 'Filesystem'], ['Job', 'IO Scheduler'])
 	html_dirs.append(generate_html(html_subdirs, "", root_path, newpath, 'daily-tests-barchart', 'Fio metrics (across tests)' + ', '.join(date)))
 
 #
