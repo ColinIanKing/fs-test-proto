@@ -242,7 +242,12 @@ def array_to_str(array):
 #  keys in sysinfo to a label
 #
 def sysinfo_keys_to_label(sysinfo, keys):
-	return ', '.join([ sysinfo[key] for key in keys if key in sysinfo ])
+	#
+	#  ignore_keys are keys special keys we want to hide from the label
+	#
+	ignore_keys = ['Kernel-release-canonical']
+
+	return ', '.join([ sysinfo[key] for key in keys if key in sysinfo and key not in ignore_keys ])
 
 #
 #  Convert a string into a filename containing letters and digits
@@ -579,8 +584,6 @@ def moving_average(values, window):
 #  plot samples and heatmaps from raw fio data
 #
 def plot_samples_raw_fio_data(root_path, key, keys, title, sysinfos):
-	title_keys = ['Job', 'Filesystem', 'Kernel-release', 'Kernel-release-canonical']
-
 	html = ""
 	chart = 0
 
@@ -650,64 +653,59 @@ def plot_samples_raw_fio_data(root_path, key, keys, title, sysinfos):
 	#
 	# Now do scatter plot and heat maps
 	#
-	for fs in sorted(filesystems):
-		for io in sorted(ioscheds):
-			for sysinfo in sysinfos:
-				subtitle = ""
-				for k in title_keys:
-					if not k in keys:
-						subtitle += sysinfo[k] + ", "
+	for i in indexes:
+		sysinfo = sysinfos[i]
+		subtitle = ""
 
-				if sysinfo['Filesystem'] == fs and sysinfo['IO Scheduler'] == io:
-					samples = sysinfo['Samples'][key]
-					max_x = 0
-					max_y = 0
-					mean_y = 0
-					all_x = []
-					all_y = []
-					#
-					#  Data is bundled in 1 or more sets of results
-					#  For scatter plot and heatmap we can combine
-					#  it all into one big hunk of data
-					#
-					for (x, y) in samples:
-						all_x += x
-						all_y += y
+		samples = sysinfo['Samples'][key]
+		max_x = 0
+		max_y = 0
+		mean_y = 0
+		all_x = []
+		all_y = []
+		#
+		#  Data is bundled in 1 or more sets of results
+		#  For scatter plot and heatmap we can combine
+		#  it all into one big hunk of data
+		#
+		for (x, y) in samples:
+			all_x += x
+			all_y += y
 
-					len_all_y = len(all_y)
-					if len_all_y > 0:
-						max_y = max(all_y)
-						avg_y = moving_average(all_y, len(all_y) / 20)
-						mean_y = float(sum(all_y)) / len_all_y
-					if len(all_x) > 0:
-						max_x = max(all_x)
+		len_all_y = len(all_y)
+		if len_all_y > 0:
+			max_y = max(all_y)
+			avg_y = moving_average(all_y, len(all_y) / 20)
+			mean_y = float(sum(all_y)) / len_all_y
+		if len(all_x) > 0:
+			max_x = max(all_x)
 
-					rows=32
-					cols=64
-					tick_interval = 5
-					heatmap, yedges, xedges = np.histogram2d(all_y, all_x, bins=(rows,cols))
+		rows=32
+		cols=64
+		tick_interval = 5
+		heatmap, yedges, xedges = np.histogram2d(all_y, all_x, bins=(rows,cols))
 
-					rows_delta = float(max_y) / float(tick_interval - 1)
-					cols_delta = float(max_x) / float(tick_interval)
-					heatmap_vticks = []
-					for k in range(0, tick_interval + 1):
-						heatmap_vticks.append("{v:" + str(k * float(rows)/tick_interval) + ", f:'" + str(k * float(max_y)/tick_interval) + "'}")
-					heatmap_hticks = []
-					for k in range(0, tick_interval + 1):
-						heatmap_hticks.append("{v:" + str(k * float(cols)/tick_interval) + ", f:'" + str(k * float(max_x)/tick_interval) + "'}")
-					vticks = []
-					for k in range(0, tick_interval + 1):
-						vticks.append("{v:" + str(k * float(max_y)/tick_interval) + ", f:'" + str(k * float(max_y)/tick_interval) + "'}")
-					hticks = []
-					for k in range(0, tick_interval + 1):
-						hticks.append("{v:" + str(k * float(max_x)/tick_interval) + ", f:'" + str(k * float(max_x)/tick_interval) + "'}")
+		rows_delta = float(max_y) / float(tick_interval - 1)
+		cols_delta = float(max_x) / float(tick_interval)
+		heatmap_vticks = []
+		for k in range(0, tick_interval + 1):
+			heatmap_vticks.append("{v:" + str(k * float(rows)/tick_interval) + ", f:'" + str(k * float(max_y)/tick_interval) + "'}")
+		heatmap_hticks = []
+		for k in range(0, tick_interval + 1):
+			heatmap_hticks.append("{v:" + str(k * float(cols)/tick_interval) + ", f:'" + str(k * float(max_x)/tick_interval) + "'}")
+		vticks = []
+		for k in range(0, tick_interval + 1):
+			vticks.append("{v:" + str(k * float(max_y)/tick_interval) + ", f:'" + str(k * float(max_y)/tick_interval) + "'}")
+		hticks = []
+		for k in range(0, tick_interval + 1):
+			hticks.append("{v:" + str(k * float(max_x)/tick_interval) + ", f:'" + str(k * float(max_x)/tick_interval) + "'}")
 
-					skip = float(len_all_y) / float(default_max_plots_in_scatter_plot)
-					if skip > 1:
-						all_x = [ all_x[int(r)] for r in np.arange(0, len(all_x) - 1, skip)]
-						all_y = [ all_y[int(r)] for r in np.arange(0, len(all_y) - 1, skip)]
-						avg_y = [ avg_y[int(r)] for r in np.arange(0, len(avg_y) - 1, skip)]
-					html += '''
+		skip = float(len_all_y) / float(default_max_plots_in_scatter_plot)
+		if skip > 1:
+			all_x = [ all_x[int(r)] for r in np.arange(0, len(all_x) - 1, skip)]
+			all_y = [ all_y[int(r)] for r in np.arange(0, len(all_y) - 1, skip)]
+			avg_y = [ avg_y[int(r)] for r in np.arange(0, len(avg_y) - 1, skip)]
+		html += '''
 <html>
   <head>
     <script type="text/javascript" src="http://www.google.com/jsapi"></script>
@@ -722,17 +720,17 @@ def plot_samples_raw_fio_data(root_path, key, keys, title, sysinfos):
         var data = google.visualization.arrayToDataTable([
 ['Sample #','Value', 'Rolling Average', 'Mean'],
 '''
-					n_avg_y = len(avg_y)
-					offset = (len(all_y) - n_avg_y) / 2
-					mean_y = str(mean_y)
-					for k in range(0,len(all_y)):
-						if k >= offset and (k - offset) < n_avg_y:
-							avg = str(avg_y[k - offset])
-						else:
-							avg = "null"
-						html += "[" + str(all_x[k]) + "," + str(all_y[k]) + "," + avg + "," + mean_y +"],\n"
+		n_avg_y = len(avg_y)
+		offset = (len(all_y) - n_avg_y) / 2
+		mean_y = str(mean_y)
+		for k in range(0,len(all_y)):
+			if k >= offset and (k - offset) < n_avg_y:
+				avg = str(avg_y[k - offset])
+			else:
+				avg = "null"
+			html += "[" + str(all_x[k]) + "," + str(all_y[k]) + "," + avg + "," + mean_y +"],\n"
 
-					html += '''
+		html += '''
 	]);
 
         var options = {
@@ -758,16 +756,16 @@ def plot_samples_raw_fio_data(root_path, key, keys, title, sysinfos):
         var data = google.visualization.arrayToDataTable([
 ['Sample #','Value',{ role: 'style'}],
 '''
-					colors = heatmap_colors(heatmap)
-					row=0
-					for datarow in heatmap:
-						col = 0
-						for d in datarow:
-							html += "[" + str(col + 0.5)  + "," + str(row + 0.5) + ",'color:#" + colors[int(d)] + "'],"
-							col += 1
-						row += 1
+		colors = heatmap_colors(heatmap)
+		row=0
+		for datarow in heatmap:
+			col = 0
+			for d in datarow:
+				html += "[" + str(col + 0.5)  + "," + str(row + 0.5) + ",'color:#" + colors[int(d)] + "'],"
+				col += 1
+			row += 1
 
-					html += '''
+		html += '''
 	]);
 
         var options = {
@@ -798,7 +796,7 @@ def plot_samples_raw_fio_data(root_path, key, keys, title, sysinfos):
     <tr>
     </table>
 '''
-					chart += 1
+		chart += 1
 
 	return html
 
