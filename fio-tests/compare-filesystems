@@ -520,6 +520,11 @@ def plot_perf_horiz_trend(html_subdirs, job, path, sysinfos):
 				except:
 					percents[address] = percent
 
+	if len(percents) == 0:
+		html_subdirs.append(generate_html([], "<tr><td><center>No perf data for this test</center></td></tr>", path, new_path, job, job))
+		return
+		
+
 	#
 	# Now produce a char for each symbol(!)
 	#
