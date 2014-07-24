@@ -362,10 +362,17 @@ def plot_horiz_trend(html_subdirs, path, keys, config, collection):
 	filesystems = set([])
 	ioscheds = set([])
 	all_xlabels = set([])
+	xlabel_map = { }
 	for (subtitle, xlabels, yvalues, xlabel, sysinfos) in collection:
-		all_xlabels = all_xlabels.union({ xlabel for xlabel in xlabels })
-		filesystems = filesystems.union({ sysinfo['Filesystem'] for sysinfo in sysinfos })
-		ioscheds = ioscheds.union({ sysinfo['IO Scheduler'] for sysinfo in sysinfos })
+		for sysinfo in sysinfos:
+			human_xlabel = sysinfo['Kernel-release'] + " " + sysinfo['Date']
+			sort_xlabel = sysinfo['Kernel-release-canonical'] + " " + sysinfo['Date']
+
+			xlabel_map[sort_xlabel] = human_xlabel
+
+			all_xlabels.add(sort_xlabel)
+			filesystems.add(sysinfo['Filesystem'])
+			ioscheds.add(sysinfo['IO Scheduler'])
 
 	all_xlabels = sorted(all_xlabels)
 	ioscheds = sorted(ioscheds)
@@ -377,6 +384,9 @@ def plot_horiz_trend(html_subdirs, path, keys, config, collection):
 	chart = 0
 	html = ""
 
+	#
+	#  Generate a graph for each I/O scheduler found..
+	#
 	for io in ioscheds:
 		html += '''
 	<script type="text/javascript">
@@ -390,19 +400,28 @@ def plot_horiz_trend(html_subdirs, path, keys, config, collection):
 			html += ", '" + fs + "'"
 		html += "],\n"
 
-		for xl in all_xlabels:
+		for x in all_xlabels:
+			#
+			#  We map munged sorted names to human readable text
+			#
+			xl = xlabel_map[x]
 			html += "[ '" + xl + "' "
 			values = {}
+			#
+			#  Scan across file systems and look for the matching
+			#  value that we need to plot
+			#
 			for fs in filesystems:
-				values = " null "
+				value = " null "
 				for (subtitle, xlabels, yvalues, xlabel, sysinfos) in collection:
-					sysinfo = sysinfos[0]
-					if sysinfo['Filesystem'] == fs and \
-					   sysinfo['IO Scheduler'] == io and \
-					   xl in xlabels:
-						index = xlabels.index(xl)
-						values = str(yvalues[index])
-				html += "," + values
+					for j in range(0, len(sysinfos)):
+						sysinfo = sysinfos[j]
+						if xl == sysinfo['Kernel-release'] + " " + sysinfo['Date'] and \
+						   sysinfo['Filesystem'] == fs and \
+						   sysinfo['IO Scheduler'] == io:
+							value = str(yvalues[j])
+							break
+				html += "," + value
 			html += "],\n"
 
 		html += "]);\n"
@@ -1433,9 +1452,9 @@ mkdirp(tmpdir)
 #daily_tests_perf_report(html_dirs, tmpdir, dates)
 #daily_tests_perf_report_reduced(html_dirs, tmpdir, dates)
 #daily_tests_flamegraph(html_dirs, tmpdir, dates)
-daily_tests_barchart(html_dirs, tmpdir, dates)
-daily_tests_samples(html_dirs, tmpdir, dates)
-#overtime_trends(html_dirs, tmpdir)
+#daily_tests_barchart(html_dirs, tmpdir, dates)
+#daily_tests_samples(html_dirs, tmpdir, dates)
+overtime_trends(html_dirs, tmpdir)
 #overtime_perf_trends(html_dirs, tmpdir)
 
 
