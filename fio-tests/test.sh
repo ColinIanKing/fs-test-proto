@@ -130,7 +130,7 @@ if [ $UID -ne 0 ]; then
 	exit 1
 fi
 
-while getopts "D:T:d:m:s:f:PS" opt; do
+while getopts "D:T:d:m:s:f:PSr:" opt; do
 	case $opt in
 	D)
 		DATE_START=$OPTARG
@@ -157,6 +157,9 @@ while getopts "D:T:d:m:s:f:PS" opt; do
 			exit 1
 			;;
 		esac
+		;;
+	r)
+		RUNTIME=$OPTARG
 		;;
 	P)
 		echo "Using perf mode"
