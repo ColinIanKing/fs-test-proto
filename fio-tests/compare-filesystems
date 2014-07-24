@@ -56,8 +56,8 @@ def generate_html(html_subdirs, html, root_path, sub_path, html_file, title):
   <script type="text/javascript" src="https://www.google.com/jsapi"></script>
   <meta content="text/html; charset=ISO-8859-1"
  http-equiv="content-type">
-          <link rel="stylesheet" href="http://kernel.ubuntu.com/media/kernel-style.css" type="text/css" media="screen" />
-        <style>
+  <link rel="stylesheet" href="http://kernel.ubuntu.com/media/kernel-style.css" type="text/css" media="screen" />
+  <style>
             div.index-bottom-section {
                  border-radius: 0px;
                     box-shadow: 0 1px 3px rgba(0,0,0,0.3);
@@ -85,44 +85,42 @@ def generate_html(html_subdirs, html, root_path, sub_path, html_file, title):
                text-decoration: none;
             }
 
-        </style>
-  <title>''' + title + '''</title>'''
-	page += '''
+  </style>
+  <title>''' + title + '''</title>
 </head>
-    <body class="dash-body">
-        <div class="dash-center-wrap">
-            <div class="dash-center">
-                <div class="dash-center-content">
-                    <div id="dash-header">
-                        <div id="dash-timestamp">
-                            <a href="http://ubuntu.com" title="Home" rel="home"><img src="media/ubuntu-logo.png" alt="Home" /></a>
-                        </div>
-                        <h1>Ubuntu Kernel Team</h1>
-                    </div> <!-- header -->
-  <h2><center>''' + title + '''</center></h2>
-<center>
-  <table width=100% cellspacing="2">
-'''
+  <body class="dash-body">
+    <div class="dash-center-wrap">
+      <div class="dash-center">
+        <div class="dash-center-content">
+          <div id="dash-header">
+            <div id="dash-timestamp">
+              <a href="http://ubuntu.com" title="Home" rel="home"><img src="media/ubuntu-logo.png" alt="Home" /></a>
+            </div>
+            <h1>Ubuntu Kernel Team</h1>
+          </div>
+          <h2><center>''' + title + '''</center></h2>
+          <center>
+            <table width=100% cellspacing="2">'''
 	colors = [ "#ffffff", "#e0f0ff" ]
 	i = 0
 	for (t, f) in sorted(html_subdirs, key=lambda d: d[0]):
 		common = os.path.commonprefix([sub_path, f])
 		relname = f[len(common)+1:]
-		page += '\n    <tr><td><center><a href="' + relname + '">' + t + '</a></center></td></tr>'
+		page += '\n              <tr><td><center><a href="' + relname + '">' + t + '</a></center></td></tr>'
 	page += html
 
 	for f in sorted(os.listdir(sub_path)):
 		(filename, extension) = os.path.splitext(f)
 		if extension in [ ".png" ]:
-			page += '\n <tr><td bgcolor="' + colors[i % 2] + '"><center><img src=' + f + '></center></td></tr>'
+			page += '\n              <tr><td bgcolor="' + colors[i % 2] + '"><center><img src=' + f + '></center></td></tr>'
 			i += 1
 	page += '''
-  </table>
-</center>
-                </div>
-            </div>
+            </table>
+          </center>
         </div>
-</body>
+      </div>
+    </div>
+  </body>
 </html>'''
 	mkdirp(sub_path)
 	filename = os.path.join(sub_path, "index.html")
@@ -1091,7 +1089,7 @@ def flamegraph_perf_data(html_subdirs, root_path, path, stats, keys, title):
 		new_path = os.path.join(path, job)
 		mkdirp(new_path)
 
-		html = ""
+		html = "\n"
 		if len(ordered_stats):
 			i = 0
 			for sysinfo in ordered_stats:
@@ -1104,7 +1102,7 @@ def flamegraph_perf_data(html_subdirs, root_path, path, stats, keys, title):
 				elif os.path.isfile(perffile):
 					cmd = "cat"
 				else:
-					html += "<tr><td><center>No perf data for " + titles[i] + "</center></td></tr>"
+					html += "              <tr><td><center>No perf data for " + titles[i] + "</center></td></tr>\n"
 					i = i + 1
 					continue
 
@@ -1123,7 +1121,7 @@ def flamegraph_perf_data(html_subdirs, root_path, path, stats, keys, title):
 	return html
 
 
-def histogram_perf_report(html_subdirs, root_path, path, stats, keys, title, symbols, threshold):
+def barchart_perf_report(html_subdirs, root_path, path, stats, keys, title, symbols, threshold):
 	#
 	# Find all unique jobs
 	#
@@ -1149,6 +1147,13 @@ def histogram_perf_report(html_subdirs, root_path, path, stats, keys, title, sym
 						except:
 							percents[address] = percent
 
+		new_path = os.path.join(path, job)
+		mkdirp(new_path)
+
+		if len(percents) == 0:
+			html_subdirs.append(generate_html([], "<tr><td><center>No perf data for this test</center></td></tr>", root_path, new_path, job, job))
+			continue
+			
 		html = ""
 		print "Histogram of " + title + " (" + job + ")"
 		ordered_stats = []
@@ -1175,8 +1180,6 @@ def histogram_perf_report(html_subdirs, root_path, path, stats, keys, title, sym
 								except:
 									pc[address][tag] = percent
 
-		new_path = os.path.join(path, job)
-		mkdirp(new_path)
 
 		html += '''
 	<tr><td><center>
@@ -1376,7 +1379,7 @@ def daily_tests_perf_report(html_dirs, root_path, date):
 	new_path = os.path.join(root_path, 'perfreport')
 	mkdirp(new_path)
 	html_subdirs = []
-	histogram_perf_report(html_subdirs, root_path, new_path, tests, keys, 'perfreport', [], 100000)
+	barchart_perf_report(html_subdirs, root_path, new_path, tests, keys, 'perfreport', [], 100000)
 	html_dirs.append(generate_html(html_subdirs, "", root_path, new_path, 'perfreport', "Perf Report (all symbols) (by test) " + ', '.join(date)))
 
 #
@@ -1399,7 +1402,7 @@ def daily_tests_perf_report_reduced(html_dirs, root_path, date):
 	new_path = os.path.join(root_path, 'perfreport-reduced')
 	mkdirp(new_path)
 	html_subdirs = []
-	histogram_perf_report(html_subdirs, root_path, new_path, tests, keys, 'perfreport-reduced', symbols, 100)
+	barchart_perf_report(html_subdirs, root_path, new_path, tests, keys, 'perfreport-reduced', symbols, 100)
 	html_dirs.append(generate_html(html_subdirs, "", root_path, new_path, 'perfreport-reduced', "Perf Report (reduced symbols, top 100) (by test) " + ', '.join(date)))
 
 
