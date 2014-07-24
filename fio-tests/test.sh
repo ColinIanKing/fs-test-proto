@@ -164,7 +164,7 @@ while getopts "D:T:d:m:s:f:PS" opt; do
 		;;
 	S)
 		echo "Using stats mode"
-		mode=-S
+		MODE=-S
 		;;
 	esac
 done
