@@ -104,7 +104,7 @@ log_job_info()
 stats()
 {
 	if [ ${SCENARIO} == "perf" ]; then
-		perf record -F ${PERF_FREQ} -g -- ${ROOT_PATH}/perf-wrapper.sh -e BLOCKSIZE=${BLOCKSIZE} -e SIZE=${SIZE} -e DIRECTORY=${DIRECTORY} $FIO $* ${ROOT_PATH}/jobs/${JOB} --output-format=json --output=${RESULTS_PATH}/fio-stats.json
+		perf record -F ${PERF_FREQ} -g -- ${ROOT_PATH}/perf-wrapper.sh -e LOG_AVG_MSEC=${LOG_AVG_MSEC} -e BLOCKSIZE=${BLOCKSIZE} -e SIZE=${SIZE} -e DIRECTORY=${DIRECTORY} $FIO $* ${ROOT_PATH}/jobs/${JOB} --output-format=json --output=${RESULTS_PATH}/fio-stats.json
 		perf report -i ${RESULTS_PATH}/perf.data > ${RESULTS_PATH}/perf.report
 		perf script -i ${RESULTS_PATH}/perf.data > ${RESULTS_PATH}/perf.script
 		gzip --best ${RESULTS_PATH}/perf.data ${RESULTS_PATH}/perf.report ${RESULTS_PATH}/perf.script
