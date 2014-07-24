@@ -140,10 +140,6 @@ samples_info = [
 	('IOLatency',	'Fio I/O Latency (us)', 		'job.*_lat\.log*', 	'daily-fio-stats-io-latency'),
 	('IOCLatencty',	'Fio I/O Completion Latency (us)',	'job.*_clat\.log*', 	'daily-fio-stats-clatency') ]
 
-samples_info = [
-	#  key		human readable title			regex on log name	generated filename path
-	('Bandwidth',	'Fio I/O Bandwidth (MB/s)',		'job.*_bw\.log*', 	'daily-fio-stats-bandwidth')]
-
 #
 #
 #  Create all dirs in a given path
