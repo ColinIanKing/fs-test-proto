@@ -546,7 +546,7 @@ def plot_samples_raw_fio_data(root_path, key, keys, title, sysinfos):
 	ioscheds = sorted({ sysinfo['IO Scheduler'] for sysinfo in sysinfos })
 
 	#
-	# Part #1, histogram of means
+	# Part #1, barchart of means
 	#
 	mean_y = []
 	vticks = []
@@ -1196,7 +1196,7 @@ def compare_stats_ordered(html_subdirs, path, graph_func, stats, group_by_keys, 
 #
 #  Histogram of fs + tests on a given day
 #
-def daily_tests_histogram(html_dirs, root_path, date):
+def daily_tests_barchart(html_dirs, root_path, date):
 	tests = find_matching_stats(stats,
 		[
 			('Date', date),
@@ -1208,12 +1208,12 @@ def daily_tests_histogram(html_dirs, root_path, date):
 	#
 	# Compare filesystems
 	#
-	newpath = os.path.join(root_path, 'daily-fio-histograms-by-filesystem')
+	newpath = os.path.join(root_path, 'daily-fio-barchart-by-filesystem')
 	mkdirp(newpath)
 	html_subdirs = []
 	compare_stats_ordered(html_subdirs, newpath, bar_horiz, tests,
 		['IO Scheduler', 'Job', 'Filesystem', 'Date' ], ['Job'])
-	html_dirs.append(generate_html(html_subdirs, "", root_path, newpath, 'daily-tests-histogram', 'Fio metrics (across tests)' + ', '.join(date)))
+	html_dirs.append(generate_html(html_subdirs, "", root_path, newpath, 'daily-tests-barchart', 'Fio metrics (across tests)' + ', '.join(date)))
 
 #
 #  Samples of fs on a given day
@@ -1386,12 +1386,12 @@ for i in range(1, len(sys.argv)):
 mkdirp(tmpdir)
 
 #daily_tests_perf_report(html_dirs, tmpdir, dates)
-daily_tests_perf_report_reduced(html_dirs, tmpdir, dates)
-daily_tests_flamegraph(html_dirs, tmpdir, dates)
-daily_tests_histogram(html_dirs, tmpdir, dates)
-daily_tests_samples(html_dirs, tmpdir, dates)
-overtime_trends(html_dirs, tmpdir)
-overtime_perf_trends(html_dirs, tmpdir)
+#daily_tests_perf_report_reduced(html_dirs, tmpdir, dates)
+#daily_tests_flamegraph(html_dirs, tmpdir, dates)
+daily_tests_barchart(html_dirs, tmpdir, dates)
+#daily_tests_samples(html_dirs, tmpdir, dates)
+#overtime_trends(html_dirs, tmpdir)
+#overtime_perf_trends(html_dirs, tmpdir)
 
 
 generate_html(html_dirs, "", tmpdir, tmpdir, 'results', 'All results')
