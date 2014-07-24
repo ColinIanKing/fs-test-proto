@@ -125,7 +125,14 @@ def sysinfo_load(file):
 	for line in f.read().splitlines():
 		if ':' in line:
 			[key, val] = line.split(':',1)
-			sysinfo[key] = val.lstrip()
+			#
+			# Temp hack for 2.6.32, need to fix in
+			# fio.sh stats gathering
+			#
+			val = val.lstrip()
+			if key in ["Processor", "Hardware"] and val == "unknown":
+				val = "x86_64"
+			sysinfo[key] = val
 	f.close()
 	return sysinfo
 
@@ -254,12 +261,13 @@ def bar_horiz(html_subdirs, root_path, keys, config, collection):
 	#  this allows us to determine how to color the bars
 	#
 	endlabels = set([])
+	label_width = 0
 	for (subtitle, xlabels, yvalues, xlabel, sysinfos) in collection:
 		endlabels = endlabels.union({ l.split()[::-1][0] for l in xlabels })
 	endlabels = sorted(endlabels)
 
 	html = ""
-	n = 0
+	chart = 0
 	for c in collection:
 		(subtitle, xlabels, yvalues, xlabel, sysinfos) = c
 		xvalues = [ xlabels.index(x) for x in xlabels ]
@@ -275,7 +283,7 @@ def bar_horiz(html_subdirs, root_path, keys, config, collection):
 	function drawChart() {
         var data = google.visualization.arrayToDataTable([
 	'''
-		html += "['Filesytem', '" + title + " (" + units + ")'," + \
+		html += "['Configuration', '" + title + " (" + units + ")'," + \
 			" { role: 'style' }],\n"
 
 		for i in indexes:
@@ -285,19 +293,27 @@ def bar_horiz(html_subdirs, root_path, keys, config, collection):
 			"fill-opacity: 0.9'],\n"
 
 		html += "]);\n"
+
+		max_label_len = max([ len(x) for x in xlabels ])
+		max_height = 28 * len(xlabels) + 8
+
 		html += '''
+
         var options = {
           title: ' ''' + xlabel + ": " + title + " (" + units + ") " + subtitle + ''' ',
           vAxis: {title: 'Configuration' },
           hAxis: {title: ' ''' + title + " (" + units + ")" + ''' ', minValue: 0 },
+	  chartArea: {left: ' ''' + str(12 * max_label_len) + ''' '},
+	  bar: {groupWidth: '90%'} ,
 	  legend: {position: 'none' }
         };
 
-        var chart = new google.visualization.BarChart(document.getElementById('chart_div'));
+        var chart = new google.visualization.BarChart(document.getElementById(''' + "'chart_div_" + str(chart) + "'" + '''));
         chart.draw(data, options);
       }
 	</script>
-	<div id="chart_div" style="width: ''' + str(default_width) + '''px; height: ''' + str(default_height) + '''px;"></div>'''
+	<div id="chart_div_''' + str(chart) + '''" style="width: ''' + str(default_width) + '''px; height: ''' + str(max_height) + '''px;"></div>'''
+		chart += 1
 
 	html_subdirs.append(generate_html([], html, root_path, newpath, filename, title))
 
@@ -1201,8 +1217,8 @@ def daily_tests_barchart(html_dirs, root_path, date):
 		[
 			('Date', date),
 			('Job', []),
-			('Filesystem', []),
 			('Kernel-release', []),
+			('Filesystem', []),
 			('IO Scheduler', [])
 		])
 	#
@@ -1212,7 +1228,7 @@ def daily_tests_barchart(html_dirs, root_path, date):
 	mkdirp(newpath)
 	html_subdirs = []
 	compare_stats_ordered(html_subdirs, newpath, bar_horiz, tests,
-		['IO Scheduler', 'Job', 'Filesystem', 'Date' ], ['Job'])
+		['IO Scheduler', 'Job', 'Filesystem', ], ['Job'])
 	html_dirs.append(generate_html(html_subdirs, "", root_path, newpath, 'daily-tests-barchart', 'Fio metrics (across tests)' + ', '.join(date)))
 
 #
