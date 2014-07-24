@@ -10,6 +10,10 @@ FIO=${HERE}/fio/fio
 DATE_START=$(date +%F)
 TIME_START=$(date +%H%M)
 LOG_AVG_MSEC=500
+#
+# P or S modes
+#
+MODE=S
 
 mk_fio()
 {
@@ -126,7 +130,7 @@ if [ $UID -ne 0 ]; then
 	exit 1
 fi
 
-while getopts "D:T:d:m:s:f:" opt; do
+while getopts "D:T:d:m:s:f:PS" opt; do
 	case $opt in
 	D)
 		DATE_START=$OPTARG
@@ -153,6 +157,14 @@ while getopts "D:T:d:m:s:f:" opt; do
 			exit 1
 			;;
 		esac
+		;;
+	P)
+		echo "Using perf mode"
+		MODE=-P
+		;;
+	S)
+		echo "Using stats mode"
+		mode=-S
 		;;
 	esac
 done
@@ -196,16 +208,13 @@ for job in ${ALL_JOBS}
 do
 	for fs in $FS
 	do
-		echo $fs
-		for opt in s #p
-		do
-			do_fs_new $fs
-			if [ $? -eq 0 ]; then
-				echo "Job: $job, Size $sz, IOsched $IOSCHED"
-				echo ${IOSCHED} > /sys/block/$BASEDEV/queue/scheduler
-				LOG_AVG_MSEC=${LOG_AVG_MSEC} DATE_START=${DATE_START} TIME_START=${TIME_START} RUNTIME=${RUNTIME} SIZE=${MIN_FILE_SIZE} DIRECTORY=$MNT ./fio.sh -$opt -j $job -F ${FIO}
-				umount $MNT
-			fi
-		done
+		echo $fs $MODE
+		do_fs_new $fs
+		if [ $? -eq 0 ]; then
+			echo "Job: $job, Size $sz, IOsched $IOSCHED"
+			echo ${IOSCHED} > /sys/block/$BASEDEV/queue/scheduler
+			LOG_AVG_MSEC=${LOG_AVG_MSEC} DATE_START=${DATE_START} TIME_START=${TIME_START} RUNTIME=${RUNTIME} SIZE=${MIN_FILE_SIZE} DIRECTORY=$MNT ./fio.sh $MODE -j $job -F ${FIO}
+			umount $MNT
+		fi
 	done
 done
