@@ -100,6 +100,11 @@ samples_info = [
 	('IOLatency',	'Fio I/O Latency (us)', 		'job.*_lat\.log*', 	'daily-fio-stats-io-latency'),
 	('IOCLatencty',	'Fio I/O Completion Latency (us)',	'job.*_clat\.log*', 	'daily-fio-stats-clatency') ]
 
+samples_info = [
+	#  key		human readable title			regex on log name	generated filename path
+	('Bandwidth',	'Fio I/O Bandwidth (MB/s)',		'job.*_bw\.log*', 	'daily-fio-stats-bandwidth')]
+
+#
 #
 #  Create all dirs in a given path
 #
@@ -203,7 +208,9 @@ def job_config_get(job):
 #  Variants of keys?
 #
 def keys_variant_collection(part_stats):
-	skipkeys = [ 'Perfreport', 'Fiostats', 'Datapath', 'Samples', 'Time-run','Time', 'Kernel-version', 'Full Date']
+	skipkeys = [ 'Perfreport', 'Fiostats', 'Datapath', 'Samples', \
+		     'Time-run','Time', 'Kernel-version', 'Full Date', \
+		     'Kernel-version-canonical']
 	keys = set([])
 	for stats in part_stats:
 		for sysinfo1 in stats:
@@ -305,7 +312,7 @@ def bar_horiz(html_subdirs, root_path, keys, config, collection):
 		html += "['Configuration', '" + title + " (" + units + ")'," + \
 			" { role: 'style' }],\n"
 
-		max_height = 40 * len(indexes) + 8
+		max_height = 35 * len(indexes) + 8
 		for i in indexes:
 			color = default_colors[fs.index(sysinfos[i]['Filesystem'])]
 			label = sysinfos[i]['Kernel-release'] + ", " + \
@@ -572,7 +579,7 @@ def moving_average(values, window):
 #  plot samples and heatmaps from raw fio data
 #
 def plot_samples_raw_fio_data(root_path, key, keys, title, sysinfos):
-	title_keys = ['Job', 'Filesystem', 'Kernel-release']
+	title_keys = ['Job', 'Filesystem', 'Kernel-release', 'Kernel-release-canonical']
 
 	html = ""
 	chart = 0
@@ -585,24 +592,14 @@ def plot_samples_raw_fio_data(root_path, key, keys, title, sysinfos):
 	#
 	mean_y = []
 	vticks = []
-	for fs in filesystems:
-		for io in ioscheds:
-			for sysinfo in sysinfos:
-				if sysinfo['Filesystem'] == fs and sysinfo['IO Scheduler'] == io:
-					samples = sysinfo['Samples'][key]
-					total_y = 0
-					total_n = 0
-					for (x, y) in samples:
-						total_y += sum(y)
-						total_n += len(y)
 
-					if total_n != 0:
-						mean_y.append(float(total_y) / total_n)
-					else:
-						mean_y.append(0)
-					vticks.append(io + ' ' + fs)
+	max_label_len = max([ len( \
+				sysinfo['Kernel-release'] + ", " + \
+		        	sysinfo['IO Scheduler'] + ", " + \
+				sysinfo['Filesystem']) for sysinfo in sysinfos ])
+	#indexes = sorted(range(len(sysinfos)), key=lambda x : sysinfos[x]['Kernel-release-canonical'] + sysinfos[x]['Filesystem'] + sysinfos[x]['IO Scheduler'])
+	indexes = sorted(range(len(sysinfos)), key=lambda x : sysinfos[x]['Filesystem'] + sysinfos[x]['IO Scheduler'] + sysinfos[x]['Kernel-release-canonical'])
 
-	nbars = len(vticks)
 	html += '''
 	<script type="text/javascript">
 	google.load("visualization", "1", {packages:["corechart"]});
@@ -614,18 +611,33 @@ def plot_samples_raw_fio_data(root_path, key, keys, title, sysinfos):
 	html += "['Filesytem', '" + title + "'," + \
 		" { role: 'style' }],\n"
 
-	for i in range(0, len(mean_y)):
-		fs = vticks[i].split()[::-1][0]
-		html += "['" + vticks[i] + "', " + str(mean_y[i]) + "," + \
-			"'fill-color: " + default_colors[filesystems.index(fs)] + "; " + \
+	for i in indexes:
+		samples = sysinfos[i]['Samples'][key]
+		total_y = 0
+		total_n = 0
+		for (x, y) in samples:
+			total_y += sum(y)
+			total_n += len(y)
+			mean_y = float(total_y) / total_n
+
+		color = default_colors[filesystems.index(sysinfos[i]['Filesystem'])]
+		label = sysinfos[i]['Kernel-release'] + ", " + \
+			sysinfos[i]['IO Scheduler'] + ", " + \
+			sysinfos[i]['Filesystem']
+
+		html += "['" + label + "', " + str(mean_y) + "," + \
+			"'fill-color: " + color + "; " + \
 			"fill-opacity: 0.9'],\n"
 
+
+	max_height = 35 * len(indexes) + 8
 	html += "]);\n"
 	html += '''
         var options = {
           title: 'Mean ''' + title + ''' ',
           vAxis: {title: 'Configuration' },
 	  hAxis: {title: 'Mean ''' + title + ''' ', minValue: 0 },
+	  chartArea: {left: ' ''' + str(10 * max_label_len) + ''' '},
 	  legend: {position: 'none' }
         };
 
@@ -633,7 +645,7 @@ def plot_samples_raw_fio_data(root_path, key, keys, title, sysinfos):
         chart.draw(data, options);
       }
 	</script>
-	<div id="chart_div_hist" style="width: ''' + str(default_width) + '''px; height: ''' + str(default_height) + '''px;"></div>'''
+	<div id="chart_div_hist" style="width: ''' + str(default_width) + '''px; height: ''' + str(max_height) + '''px;"></div>'''
 
 	#
 	# Now do scatter plot and heat maps
@@ -1424,7 +1436,7 @@ mkdirp(tmpdir)
 #daily_tests_perf_report_reduced(html_dirs, tmpdir, dates)
 #daily_tests_flamegraph(html_dirs, tmpdir, dates)
 daily_tests_barchart(html_dirs, tmpdir, dates)
-#daily_tests_samples(html_dirs, tmpdir, dates)
+daily_tests_samples(html_dirs, tmpdir, dates)
 #overtime_trends(html_dirs, tmpdir)
 #overtime_perf_trends(html_dirs, tmpdir)
 
