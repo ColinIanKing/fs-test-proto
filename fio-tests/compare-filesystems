@@ -56,11 +56,50 @@ def generate_html(html_subdirs, html, root_path, sub_path, html_file, title):
   <script type="text/javascript" src="https://www.google.com/jsapi"></script>
   <meta content="text/html; charset=ISO-8859-1"
  http-equiv="content-type">
-  <title>''' + title + '''</title>
-  <h2><center>''' + title + '''</center></h2>'''
+          <link rel="stylesheet" href="http://kernel.ubuntu.com/media/kernel-style.css" type="text/css" media="screen" />
+        <style>
+            div.index-bottom-section {
+                 border-radius: 0px;
+                    box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+                    background: #f7f5f6;
+                       padding: 20px;
+                 margin-top: -16px;
+                       /*
+                 margin-bottom: 20px;
+                 */
+
+                     font-size: 11px;
+                   line-height: 16px;
+                         color: #333;
+            }
+
+            a {
+                         color: #333;
+            }
+
+            a:hover {
+               text-decoration: underline;
+            }
+
+            a:active a:link, a:visited {
+               text-decoration: none;
+            }
+
+        </style>
+  <title>''' + title + '''</title>'''
 	page += '''
 </head>
-<body>
+    <body class="dash-body">
+        <div class="dash-center-wrap">
+            <div class="dash-center">
+                <div class="dash-center-content">
+                    <div id="dash-header">
+                        <div id="dash-timestamp">
+                            <a href="http://ubuntu.com" title="Home" rel="home"><img src="media/ubuntu-logo.png" alt="Home" /></a>
+                        </div>
+                        <h1>Ubuntu Kernel Team</h1>
+                    </div> <!-- header -->
+  <h2><center>''' + title + '''</center></h2>
 <center>
   <table width=100% cellspacing="2">
 '''
@@ -80,6 +119,9 @@ def generate_html(html_subdirs, html, root_path, sub_path, html_file, title):
 	page += '''
   </table>
 </center>
+                </div>
+            </div>
+        </div>
 </body>
 </html>'''
 	mkdirp(sub_path)
@@ -652,14 +694,14 @@ def plot_samples_raw_fio_data(root_path, key, keys, title, sysinfos):
 			"fill-opacity: 0.9'],\n"
 
 
-	max_height = 35 * len(indexes) + 8
+	max_height = 24 * len(indexes) + 8
 	html += "]);\n"
 	html += '''
         var options = {
           title: 'Mean ''' + title + ''' ',
           vAxis: {title: 'Configuration' },
 	  hAxis: {title: 'Mean ''' + title + ''' ', minValue: 0 },
-	  chartArea: {left: ' ''' + str(10 * max_label_len) + ''' '},
+	  chartArea: {left: ' ''' + str(10 * max_label_len) + ''' ', height:'95%' },
 	  legend: {position: 'none' }
         };
 
@@ -1449,13 +1491,13 @@ for i in range(1, len(sys.argv)):
 
 mkdirp(tmpdir)
 
-#daily_tests_perf_report(html_dirs, tmpdir, dates)
-#daily_tests_perf_report_reduced(html_dirs, tmpdir, dates)
-#daily_tests_flamegraph(html_dirs, tmpdir, dates)
-#daily_tests_barchart(html_dirs, tmpdir, dates)
-#daily_tests_samples(html_dirs, tmpdir, dates)
+daily_tests_perf_report(html_dirs, tmpdir, dates)
+daily_tests_perf_report_reduced(html_dirs, tmpdir, dates)
+daily_tests_flamegraph(html_dirs, tmpdir, dates)
+daily_tests_barchart(html_dirs, tmpdir, dates)
+daily_tests_samples(html_dirs, tmpdir, dates)
 overtime_trends(html_dirs, tmpdir)
-#overtime_perf_trends(html_dirs, tmpdir)
+overtime_perf_trends(html_dirs, tmpdir)
 
 
 generate_html(html_dirs, "", tmpdir, tmpdir, 'results', 'All results')
