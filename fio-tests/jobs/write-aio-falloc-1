@@ -21,7 +21,7 @@ rw=randwrite
 numjobs=1
 filename=fragmented_file
 
-[punch hole-fuzzer]
+[punch-hole-fuzzer]
 bs=4k
 runtime=5
 time_based=5
@@ -30,7 +30,7 @@ numjobs=2
 filename=fragmented_file
 
 ## Mesure IO performance on fragmented file
-[sequential aio-dio write]
+[sequential-aio-dio-write]
 stonewall
 ioengine=libaio
 numjobs=1
