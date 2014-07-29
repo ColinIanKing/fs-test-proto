@@ -704,11 +704,11 @@ def plot_samples_raw_fio_data(root_path, key, keys, title, sysinfos):
 	  legend: {position: 'none' }
         };
 
-        var chart = new google.visualization.BarChart(document.getElementById('chart_div_hist'));
+        var chart = new google.visualization.BarChart(document.getElementById('chart_div_barchart'));
         chart.draw(data, options);
       }
 	</script>
-	<div id="chart_div_hist" style="width: ''' + str(default_width) + '''px; height: ''' + str(max_height) + '''px;"></div>'''
+	<div id="chart_div_barchar" style="width: ''' + str(default_width) + '''px; height: ''' + str(max_height) + '''px;"></div>'''
 
 	#
 	# Now do scatter plot and heat maps
@@ -1156,7 +1156,7 @@ def barchart_perf_report(html_subdirs, root_path, path, stats, keys, title, symb
 			continue
 			
 		html = ""
-		print "Histogram of " + title + " (" + job + ")"
+		print "Bar chart of " + title + " (" + job + ")"
 		ordered_stats = []
 		titles = []
 
@@ -1304,7 +1304,7 @@ def compare_stats_ordered(html_subdirs, path, graph_func, stats, group_by_keys, 
 
 
 #
-#  Histogram of fs + tests on a given day
+#  Bar chart of fs + tests on a given day
 #
 def daily_tests_barchart(html_dirs, root_path, date):
 	tests = find_matching_stats(stats,
