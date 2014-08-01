@@ -1,0 +1,1 @@
+db-emu emulates database characteristics with 1 sequential writer, 8 random readers, 8 slower random writers, 16 mixed random read/writers.

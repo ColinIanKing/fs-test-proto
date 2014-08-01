@@ -1,0 +1,1 @@
+write-mmap-rand-1 performs random writes using memory mapped file I/O
