@@ -1403,7 +1403,7 @@ def daily_tests_samples(html_dirs, root_path, date):
 		new_path = os.path.join(root_path, name)
 		mkdirp(new_path)
 		html_subdirs = []
-		html = "<center>Note: these charts may take a while to render on a web browser</center>"
+		html = "<center><b>Note: these charts may take a while to render on a web browser<b></center><br>"
 		graph_samples(html_subdirs, root_path, new_path, key, tests, keys, title)
 		if len(date) > 0:
 			html_dirs.append(generate_html(html_subdirs, html, root_path, new_path, name, title + ": " + ', '.join(date), ""))
