@@ -192,7 +192,9 @@ def sysinfo_load(file):
 #  Load perf data
 #
 def perf_report_load(file):
-	pattern = re.compile(r"""\s+(\d*\.\d+|\d+)%\s+(\d*\.\d+|\d+)%\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)""", re.VERBOSE)
+	pattern1 = re.compile(r"""\s+(\d*\.\d+|\d+)%\s+(\d*\.\d+|\d+)%\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)""", re.VERBOSE)
+	# 0.00%               sh  [kernel.kallsyms]   [k] native_write_msr_safe  
+	pattern2 = re.compile(r"""\s+(\d*\.\d+|\d+)%\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)""", re.VERBOSE)
 
 	if os.path.isfile(file):
 		f = open(file, 'r')
@@ -203,11 +205,17 @@ def perf_report_load(file):
 
 	perf_report = []
 	for line in f.read().splitlines():
-		m = pattern.match(line)
+		m = pattern1.match(line)
 		if m:
-			percent = float(m.group(1))
+			percent = float(m.group(2))
 			address = m.group(6)
 			perf_report.append((address, percent))
+		else:
+			m = pattern2.match(line)
+			if m:
+				percent = float(m.group(1))
+				address = m.group(5)
+				perf_report.append((address, percent))
 
 	return perf_report
 
@@ -660,7 +668,6 @@ def plot_samples_raw_fio_data(root_path, key, keys, title, sysinfos):
 				sysinfo['Kernel-release'] + ", " + \
 		        	sysinfo['IO Scheduler'] + ", " + \
 				sysinfo['Filesystem']) for sysinfo in sysinfos ])
-	#indexes = sorted(range(len(sysinfos)), key=lambda x : sysinfos[x]['Kernel-release-canonical'] + sysinfos[x]['Filesystem'] + sysinfos[x]['IO Scheduler'])
 	indexes = sorted(range(len(sysinfos)), key=lambda x : sysinfos[x]['Filesystem'] + sysinfos[x]['IO Scheduler'] + sysinfos[x]['Kernel-release-canonical'])
 
 	html += '''
@@ -681,7 +688,10 @@ def plot_samples_raw_fio_data(root_path, key, keys, title, sysinfos):
 		for (x, y) in samples:
 			total_y += sum(y)
 			total_n += len(y)
-			mean_y = float(total_y) / total_n
+			if total_n != 0:
+				mean_y = float(total_y) / total_n
+			else:
+				mean_y = 0
 
 		color = default_colors[filesystems.index(sysinfos[i]['Filesystem'])]
 		label = sysinfos[i]['Kernel-release'] + ", " + \
@@ -708,7 +718,7 @@ def plot_samples_raw_fio_data(root_path, key, keys, title, sysinfos):
         chart.draw(data, options);
       }
 	</script>
-	<div id="chart_div_barchar" style="width: ''' + str(default_width) + '''px; height: ''' + str(max_height) + '''px;"></div>'''
+	<div id="chart_div_barchart" style="width: ''' + str(default_width) + '''px; height: ''' + str(max_height) + '''px;"></div>'''
 
 	#
 	# Now do scatter plot and heat maps
@@ -732,12 +742,19 @@ def plot_samples_raw_fio_data(root_path, key, keys, title, sysinfos):
 			all_x += x
 			all_y += y
 
+		len_all_x = len(all_x)
 		len_all_y = len(all_y)
+
+		if len_all_x == 0 and len_all_y == 0:
+			html += "<center>" + subtitle + sysinfo_keys_to_label(sysinfo, keys) + ": "
+			html += "No fio samples gathered</center>"
+			continue
+			
 		if len_all_y > 0:
 			max_y = max(all_y)
 			avg_y = moving_average(all_y, len(all_y) / 20)
 			mean_y = float(sum(all_y)) / len_all_y
-		if len(all_x) > 0:
+		if len_all_x > 0:
 			max_x = max(all_x)
 
 		rows=32
@@ -765,9 +782,9 @@ def plot_samples_raw_fio_data(root_path, key, keys, title, sysinfos):
 			all_x = [ all_x[int(r)] for r in np.arange(0, len(all_x) - 1, skip)]
 			all_y = [ all_y[int(r)] for r in np.arange(0, len(all_y) - 1, skip)]
 			avg_y = [ avg_y[int(r)] for r in np.arange(0, len(avg_y) - 1, skip)]
+
+		len_avg_g = len(avg_y)
 		html += '''
-<html>
-  <head>
     <script type="text/javascript" src="http://www.google.com/jsapi"></script>
     <script type="text/javascript">
       google.load("visualization", "1", {});
@@ -777,19 +794,25 @@ def plot_samples_raw_fio_data(root_path, key, keys, title, sysinfos):
       google.load("visualization", "1", {packages:["corechart"]});
       google.setOnLoadCallback(drawChart);
       function drawChart() {
-        var data = google.visualization.arrayToDataTable([
-['Sample #','Value', 'Rolling Average', 'Mean'],
-'''
+        var data = google.visualization.arrayToDataTable(['''
+		#
+		#  Rolling average may be empty of we don't have enough samples..
+		#
+		if len_avg_g == 0:
+			html += "['Sample #','Value', 'Mean'],\n"
+		else:
+			html += "['Sample #','Value', 'Rolling Average', 'Mean'],\n"
 		n_avg_y = len(avg_y)
 		offset = (len(all_y) - n_avg_y) / 2
-		mean_y = str(mean_y)
 		for k in range(0,len(all_y)):
-			if k >= offset and (k - offset) < n_avg_y:
-				avg = str(avg_y[k - offset])
+			if len_avg_g == 0:
+				html += "[%d,%d,%.2f],\n" % (all_x[k], all_y[k], mean_y)
 			else:
-				avg = "null"
-			html += "[" + str(all_x[k]) + "," + str(all_y[k]) + "," + avg + "," + mean_y +"],\n"
-
+				if k >= offset and (k - offset) < n_avg_y:
+					avg = "%.2f" % avg_y[k - offset]
+				else:
+					avg = "null"
+				html += "[%d,%d,%s,%.2f],\n" % (all_x[k], all_y[k], avg, mean_y)
 		html += '''
 	]);
 
@@ -1497,7 +1520,7 @@ mkdirp(tmpdir)
 
 daily_tests_perf_report(html_dirs, tmpdir, dates)
 daily_tests_perf_report_reduced(html_dirs, tmpdir, dates)
-daily_tests_flamegraph(html_dirs, tmpdir, dates)
+#daily_tests_flamegraph(html_dirs, tmpdir, dates)
 daily_tests_barchart(html_dirs, tmpdir, dates)
 daily_tests_samples(html_dirs, tmpdir, dates)
 overtime_trends(html_dirs, tmpdir)
