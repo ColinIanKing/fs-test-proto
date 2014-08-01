@@ -411,7 +411,6 @@ def plot_horiz_trend(html_subdirs, path, keys, config, collection):
 		for sysinfo in sysinfos:
 			human_xlabel = sysinfo['Kernel-release'] + " " + sysinfo['Date']
 			sort_xlabel = sysinfo['Kernel-release-canonical'] + " " + sysinfo['Date']
-
 			xlabel_map[sort_xlabel] = human_xlabel
 
 			all_xlabels.add(sort_xlabel)
@@ -498,8 +497,11 @@ def plot_perf_horiz_trend(html_subdirs, job, path, sysinfos):
 	filesystems = set([])
 	ioscheds = set([])
 	all_xlabels = set([])
+	xlabel_map = {}
 	for sysinfo in sysinfos:
-		all_xlabels.add(sysinfo['Date'] + " " + sysinfo['Kernel-release'])
+		all_xlabels.add(sysinfo['Kernel-release-canonical'])
+		xlabel_map[sysinfo['Kernel-release-canonical']] = sysinfo['Kernel-release']
+
 		filesystems.add(sysinfo['Filesystem'])
 		ioscheds.add(sysinfo['IO Scheduler'])
 
@@ -528,6 +530,7 @@ def plot_perf_horiz_trend(html_subdirs, job, path, sysinfos):
 		html_subdirs.append(generate_html([], "<tr><td><center>No perf data for this test</center></td></tr>", path, new_path, job, job))
 		return
 		
+	indexes = sorted(range(len(sysinfos)), key=lambda x : sysinfos[x]['Kernel-release-canonical'])
 
 	#
 	# Now produce a char for each symbol(!)
@@ -556,7 +559,7 @@ def plot_perf_horiz_trend(html_subdirs, job, path, sysinfos):
 		cols = set()
 		for xl in all_xlabels:
 			i = 0
-			row = [ "'" + xl + "'" ]
+			row = [ "'" + xlabel_map[xl] + "'" ]
 			cols.add(i)
 			allnull = True
 			for io in ioscheds:
@@ -564,7 +567,7 @@ def plot_perf_horiz_trend(html_subdirs, job, path, sysinfos):
 					i += 1
 					val = "null"
 					for sysinfo in sysinfos:
-						if sysinfo['Date'] + " " + sysinfo['Kernel-release'] == xl and \
+						if sysinfo['Kernel-release-canonical'] == xl and \
 						   sysinfo['Filesystem'] == fs and \
 						   sysinfo['IO Scheduler'] == io:
 							for (address, percent) in sysinfo['Perfreport']:
@@ -1518,12 +1521,12 @@ for i in range(1, len(sys.argv)):
 
 mkdirp(tmpdir)
 
-daily_tests_perf_report(html_dirs, tmpdir, dates)
-daily_tests_perf_report_reduced(html_dirs, tmpdir, dates)
+#daily_tests_perf_report(html_dirs, tmpdir, dates)
+#daily_tests_perf_report_reduced(html_dirs, tmpdir, dates)
 #daily_tests_flamegraph(html_dirs, tmpdir, dates)
-daily_tests_barchart(html_dirs, tmpdir, dates)
-daily_tests_samples(html_dirs, tmpdir, dates)
-overtime_trends(html_dirs, tmpdir)
+#daily_tests_barchart(html_dirs, tmpdir, dates)
+#daily_tests_samples(html_dirs, tmpdir, dates)
+#overtime_trends(html_dirs, tmpdir)
 overtime_perf_trends(html_dirs, tmpdir)
 
 
