@@ -145,6 +145,41 @@ samples_info = [
 	('IOCLatentcy',	'Fio I/O Completion Latency (us)',	'job.*_clat\.log*', 	'daily-fio-stats-clatency',
 	 'Charts derived from flexible I/O tester (fio) I/O completion latency measurements during a test run') ]
 
+
+fio_map = {
+	'Context Switches'	: 'Scheduler context switches',
+	'Disk Read I/Os'	: 'Disk read I/O operations',
+	'Disk Read Merges'	: 'Read I/O requests merged',
+	'Disk Read Ticks'	: 'Number of system ticks that the disk reads kept the disk busy',
+	'Disk utilisation'	: 'Percentage of disk utilisation',
+	'Disk Write I/Os'	: 'Disk write I/O operations measured',
+	'Disk Write Merges'	: 'Write I/O requests merged',
+	'Disk Write Ticks'	: 'Number of system ticks that the disk writes kept the disk busy',
+	'Latency Depth'		: '',
+	'Latency Percentile'	: '',
+	'Read Bandwidth'	: 'Mean read bandwidth',
+	'Read Bandwidth Aggregate': 'Aggreate percentage of total read bandwidth',
+	'Read Bandwidth Max'	: 'Maximum read bandwidth',
+	'Read Bandwidth Mean'	: 'Mean read bandwidth',
+	'Read Bandwidth Min'	: 'Minumum read bandwidth',
+	'Read Bandwidth StdDev'	: 'Read bandwidth standard deviation',
+	'Read Mean CLatency'	: 'Mean read completion latency (usecs)',
+	'Read Mean Latency'	: 'Mean read submission latency (usecs)',
+	'Read Ops'		: 'Read I/O operations per second',
+	'Read Run time'		: 'Read run time',
+	'System CPU'		: 'CPU usage in kernel (System)',
+	'User CPU'		: 'CPU usage in userspace',
+	'Write Bandwidth'	: 'Mean write bandwidth',
+	'Write Bandwidth Aggregate': 'Aggreate percentage of total write bandwidth',
+	'Write Bandwidth Max'	: 'Maximum write bandwidth',
+	'Write Bandwidth Mean'	: 'Mean write bandwidth',
+	'Write Bandwidth Min'	: 'Minimum write bandwidth',
+	'Write Bandwidth StdDev': 'Write bandwidth standard deviation',
+	'Write Mean CLatency'	: 'Mean write completion latency (usecs)',
+	'Write Mean Latency'	: 'Mean write submission latency (usecs)',
+	'Write Ops'		: 'Write I/O operations per second',
+	'Write Run time'	: 'Write run time'
+	}
 #
 #
 #  Create all dirs in a given path
@@ -334,6 +369,10 @@ def str_to_filename(str):
 def bar_horiz(html_subdirs, root_path, keys, config, collection):
 	title = config['Label']
 	units = config['Units']
+	if title in fio_map:
+		hint = fio_map[title]
+	else:
+		hint = ""
 	print "Bar charting " + title
 	#
 	#  Filename based on title..
@@ -364,7 +403,7 @@ def bar_horiz(html_subdirs, root_path, keys, config, collection):
 			sysinfo['Filesystem']) for sysinfo in sysinfos ]))
 	fs = sorted(fs)
 
-	html = "<h3>Comparing " + title + " by test, kernel, I/O scheduler and file system as measured by the flexible I/O tester (fio)</h3>"
+	html = "<h3>Comparing " + hint + " by test, kernel, I/O scheduler and file system as measured by the flexible I/O tester (fio)</h3>"
 	chart = 0
 	for (subtitle, xlabels, yvalues, xlabel, sysinfos) in collection:
 		#
@@ -410,7 +449,7 @@ def bar_horiz(html_subdirs, root_path, keys, config, collection):
 	<div id="chart_div_''' + str(chart) + '''" style="width: ''' + str(default_width) + '''px; height: ''' + str(max_height) + '''px;"></div>'''
 		chart += 1
 
-	html_subdirs.append(generate_html([], html, root_path, newpath, filename, title, ""))
+	html_subdirs.append(generate_html([], html, root_path, newpath, filename, title, hint))
 
 #
 #  trend line graph plot
@@ -418,7 +457,10 @@ def bar_horiz(html_subdirs, root_path, keys, config, collection):
 def plot_horiz_trend(html_subdirs, path, keys, config, collection):
 	title = config['Label']
 	units = config['Units']
-
+	if title in fio_map:
+		hint = fio_map[title]
+	else:
+		hint = title
 	#
 	# Determine all the xlabels in the collection
 	# and collect up unique filesystems and ioscheds
@@ -445,7 +487,6 @@ def plot_horiz_trend(html_subdirs, path, keys, config, collection):
 	mkdirp(new_path)
 
 	chart = 0
-	html = ""
 
 	#
 	#  Generate a graph for each I/O scheduler found..
@@ -504,7 +545,7 @@ def plot_horiz_trend(html_subdirs, path, keys, config, collection):
 	</script>
 	<div id="chart_div_''' + io + '''" style="width: ''' + str(default_width) + '''px; height: ''' + str(default_height) + '''px;"></div>'''
 
-	html_subdirs.append(generate_html([], html, new_path, new_path, title, title, ""))
+	html_subdirs.append(generate_html([], html, new_path, new_path, title, title, hint))
 
 #
 #  trend line graph plot for perf stats
@@ -1289,7 +1330,6 @@ def graph_samples(html_subdirs, root_path, path, key, stats, keys, title):
 	#
 	# Process data from each unique job:
 	#
-	#html = "" CIK
 	for job in jobs:
 		job_info = job_info_get(job)
 		print "Bar charting " + title + " (" + job + ")"
