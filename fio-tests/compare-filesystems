@@ -38,6 +38,7 @@ default_height = 350
 default_max_plots_in_scatter_plot = 1500
 
 job_config_cache = {}
+job_info_cache = {}
 
 if len(sys.argv) < 2:
 	sys.exit('Usage: %s results-path' % sys.argv[0])
@@ -48,7 +49,7 @@ if not os.path.exists(sys.argv[1]):
 #
 #  generate a html file containing links to graphs
 #
-def generate_html(html_subdirs, html, root_path, sub_path, html_file, title):
+def generate_html(html_subdirs, html, root_path, sub_path, html_file, title, hover_hint):
 	page = '''
 <!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
 <html>
@@ -103,10 +104,10 @@ def generate_html(html_subdirs, html, root_path, sub_path, html_file, title):
             <table width=100% cellspacing="2">'''
 	colors = [ "#ffffff", "#e0f0ff" ]
 	i = 0
-	for (t, f) in sorted(html_subdirs, key=lambda d: d[0]):
+	for (t, f, h) in sorted(html_subdirs, key=lambda d: d[0]):
 		common = os.path.commonprefix([sub_path, f])
 		relname = f[len(common)+1:]
-		page += '\n              <tr><td><center><a href="' + relname + '">' + t + '</a></center></td></tr>'
+		page += '\n              <tr><td><center><a href="' + relname + '" title="' + h + '">' + t + '</a></center></td></tr>'
 	page += html
 
 	for f in sorted(os.listdir(sub_path)):
@@ -127,7 +128,7 @@ def generate_html(html_subdirs, html, root_path, sub_path, html_file, title):
 	f = open(filename, 'w')
 	f.write(page)
 	f.close()
-	return (title, filename)
+	return (title, filename, hover_hint)
 
 #
 #  fio data log mappings
@@ -135,10 +136,14 @@ def generate_html(html_subdirs, html, root_path, sub_path, html_file, title):
 #
 samples_info = [
 	#  key		human readable title			regex on log name	generated filename path
-	('Bandwidth',	'Fio I/O Bandwidth (MB/s)',		'job.*_bw\.log*', 	'daily-fio-stats-bandwidth'),
-	('IOops',	'Fio I/O operations (ops/s)', 		'job.*_iops\.log*', 	'daily-fio-stats-io-ops'),
-	('IOLatency',	'Fio I/O Latency (us)', 		'job.*_lat\.log*', 	'daily-fio-stats-io-latency'),
-	('IOCLatentcy',	'Fio I/O Completion Latency (us)',	'job.*_clat\.log*', 	'daily-fio-stats-clatency') ]
+	('Bandwidth',	'Fio I/O Bandwidth (MB/s)',		'job.*_bw\.log*', 	'daily-fio-stats-bandwidth',
+	 'Charts derived from flexible I/O tester (fio) bandwidth measurements during a test run'),
+	('IOops',	'Fio I/O operations (ops/s)', 		'job.*_iops\.log*', 	'daily-fio-stats-io-ops',
+	 'Charts derived from flexible I/O tester (fio) I/O operation measurements during a test run'),
+	('IOLatency',	'Fio I/O Latency (us)', 		'job.*_lat\.log*', 	'daily-fio-stats-io-latency',
+	 'Charts derived from flexible I/O tester (fio) I/O latency  measurements during a test run'),
+	('IOCLatentcy',	'Fio I/O Completion Latency (us)',	'job.*_clat\.log*', 	'daily-fio-stats-clatency',
+	 'Charts derived from flexible I/O tester (fio) I/O completion latency measurements during a test run') ]
 
 #
 #
@@ -223,30 +228,47 @@ def perf_report_load(file):
 #  Get and cache job configuration data
 #
 def job_config_get(job):
-	config = []
-	keys = [ 'Label', 'Units', 'Scale', 'JsonPath' ]
 	if job in job_config_cache:
 		return job_config_cache[job]
-	else:
-		try:
-			f = open(os.path.join('jobs', job + '.conf'), 'r')
-		except:
-			return []
-		for line in f.read().splitlines():
-			if line[:1] == '#':
-				continue
-			if not "," in line:
-				continue
-			info = {}
-			fields = line.split(',', 4)
-			if ',' in line:
-				for i in range(0, len(fields)):
-					info[keys[i]] = fields[i].lstrip().rstrip()
 
-			config.append(info)
-		f.close()
-		job_config_cache[job] = config
-		return config
+	config = []
+	keys = [ 'Label', 'Units', 'Scale', 'JsonPath' ]
+	try:
+		f = open(os.path.join('jobs', job + '.conf'), 'r')
+	except:
+		return []
+	for line in f.read().splitlines():
+		if line[:1] == '#':
+			continue
+		if not "," in line:
+			continue
+		info = {}
+		fields = line.split(',', 4)
+		if ',' in line:
+			for i in range(0, len(fields)):
+				info[keys[i]] = fields[i].lstrip().rstrip()
+
+		config.append(info)
+	f.close()
+	job_config_cache[job] = config
+	return config
+
+#
+#  Get and cache job info
+#
+def job_info_get(job):
+	if job in job_info_cache:
+		return job_info_cache[job]
+	try:
+		f = open(os.path.join('jobs', job + '.info'), 'r')
+	except:
+		return ""
+
+	info = f.read()
+	f.close()
+	job_info_cache[job] = info
+
+	return info
 
 #
 #  Variants of keys?
@@ -342,15 +364,13 @@ def bar_horiz(html_subdirs, root_path, keys, config, collection):
 			sysinfo['Filesystem']) for sysinfo in sysinfos ]))
 	fs = sorted(fs)
 
-	html = ""
+	html = "<h3>Comparing " + title + " by test, kernel, I/O scheduler and file system as measured by the flexible I/O tester (fio)</h3>"
 	chart = 0
 	for (subtitle, xlabels, yvalues, xlabel, sysinfos) in collection:
 		#
 		# sort by kernel and file system order
 		#
 		indexes = sorted(range(len(sysinfos)), key=lambda x : sysinfos[x]['Kernel-release-canonical'] + sysinfos[x]['Filesystem'])
-		#indexes = sorted(range(len(sysinfos)), key=lambda x : sysinfos[x]['Filesystem'] + sysinfos[x]['Kernel-release-canonical'])
-
 		html += '''
 	<script type="text/javascript">
 	google.load("visualization", "1", {packages:["corechart"]});
@@ -390,7 +410,7 @@ def bar_horiz(html_subdirs, root_path, keys, config, collection):
 	<div id="chart_div_''' + str(chart) + '''" style="width: ''' + str(default_width) + '''px; height: ''' + str(max_height) + '''px;"></div>'''
 		chart += 1
 
-	html_subdirs.append(generate_html([], html, root_path, newpath, filename, title))
+	html_subdirs.append(generate_html([], html, root_path, newpath, filename, title, ""))
 
 #
 #  trend line graph plot
@@ -484,12 +504,14 @@ def plot_horiz_trend(html_subdirs, path, keys, config, collection):
 	</script>
 	<div id="chart_div_''' + io + '''" style="width: ''' + str(default_width) + '''px; height: ''' + str(default_height) + '''px;"></div>'''
 
-	html_subdirs.append(generate_html([], html, new_path, new_path, title, title))
+	html_subdirs.append(generate_html([], html, new_path, new_path, title, title, ""))
 
 #
 #  trend line graph plot for perf stats
 #
 def plot_perf_horiz_trend(html_subdirs, job, path, sysinfos):
+	job_info = job_info_get(job)
+	html = "<center>" + job_info + "<center><br>"
 	#
 	# Determine all the xlabels in the collection
 	# and collect up unique filesystems and ioscheds
@@ -512,7 +534,6 @@ def plot_perf_horiz_trend(html_subdirs, job, path, sysinfos):
 	new_path = os.path.join(path, str_to_filename(job))
 	mkdirp(new_path)
 
-	html = ""
 	#
 	# Collect symbols and get ranking order
 	#
@@ -527,7 +548,7 @@ def plot_perf_horiz_trend(html_subdirs, job, path, sysinfos):
 					percents[address] = percent
 
 	if len(percents) == 0:
-		html_subdirs.append(generate_html([], "<tr><td><center>No perf data for this test</center></td></tr>", path, new_path, job, job))
+		html_subdirs.append(generate_html([], "<tr><td><center>No perf data for this test</center></td></tr>", path, new_path, job, job, job_info))
 		return
 		
 	indexes = sorted(range(len(sysinfos)), key=lambda x : sysinfos[x]['Kernel-release-canonical'])
@@ -594,7 +615,7 @@ def plot_perf_horiz_trend(html_subdirs, job, path, sysinfos):
         var options = {
           title: ' ''' + job + " (" + symbol + ") " + ''' ',
           hAxis: {title: 'Run #' },
-          vAxis: {title: ' total CPU utilisation % ', minValue: 0  },
+          vAxis: {title: ' total utilisation % ', minValue: 0  },
 	  interpolateNulls: true,
 	  pointShape: 'diamond',
           isNull: true,
@@ -607,7 +628,7 @@ def plot_perf_horiz_trend(html_subdirs, job, path, sysinfos):
 	</script>
 	<div id="chart_div_''' + symbol + '''" style="width: ''' + str(default_width) + '''px; height: ''' + str(default_height) + '''px;"></div>'''
 
-	html_subdirs.append(generate_html([], html, new_path, new_path, job, job))
+	html_subdirs.append(generate_html([], html, new_path, new_path, job, job, job_info))
 
 #
 #  Calculate heatmap colors
@@ -654,8 +675,9 @@ def moving_average(values, window):
 #
 #  plot samples and heatmaps from raw fio data
 #
-def plot_samples_raw_fio_data(root_path, key, keys, title, sysinfos):
-	html = ""
+def plot_samples_raw_fio_data(job, root_path, key, keys, title, sysinfos):
+	job_info = job_info_get(job)
+	html = "<center>" + job_info + "<center><br>"
 	chart = 0
 
 	filesystems = sorted({ sysinfo['Filesystem'] for sysinfo in sysinfos })
@@ -723,6 +745,8 @@ def plot_samples_raw_fio_data(root_path, key, keys, title, sysinfos):
 	</script>
 	<div id="chart_div_barchart" style="width: ''' + str(default_width) + '''px; height: ''' + str(max_height) + '''px;"></div>'''
 
+	html += "<br><center><h3>Scatter plots of " + title + " and equivalent data as a heatmap</h3></center>"
+	html += "<center>(horizontal axis 'Sample #' represents the Nth data sample measured during the run time of the test)</center>"
 	#
 	# Now do scatter plot and heat maps
 	#
@@ -1010,6 +1034,7 @@ def collect_stats(path):
 		if tail in [ 'stats', 'perf']:
 			sysinfo = sysinfo_load(os.path.join(datapath, 'sysinfo.log'))
 			job_config_get(sysinfo['Job'])
+			job_info_get(sysinfo['Job'])
 
 			sysinfo['Samples'] = None	# Loaded on demand later
 			sysinfo['Datapath'] = datapath
@@ -1084,7 +1109,7 @@ def samples_load_by_pattern(path, pattern):
 def samples_load(path):
 	print "Loading data: " + path
 	samples = {}
-	for (key, title, pattern, name) in samples_info:
+	for (key, title, pattern, name, hint) in samples_info:
 		samples[key] = samples_load_by_pattern(path, pattern)
 
 	return samples
@@ -1141,7 +1166,7 @@ def flamegraph_perf_data(html_subdirs, root_path, path, stats, keys, title):
 				html += "</tr></td>"
 				i = i + 1
 
-			html_subdirs.append(generate_html([], html, root_path, new_path, job, job))
+			html_subdirs.append(generate_html([], html, root_path, new_path, job, job, ""))
 		else:
 			print "No relevant perf data can be found"
 
@@ -1160,6 +1185,7 @@ def barchart_perf_report(html_subdirs, root_path, path, stats, keys, title, symb
 	# Process data from each unique job:
 	#
 	for job in jobs:
+		job_info = job_info_get(job)
 		#
 		#  Collect up unique perf kernel syms
 		#
@@ -1178,10 +1204,10 @@ def barchart_perf_report(html_subdirs, root_path, path, stats, keys, title, symb
 		mkdirp(new_path)
 
 		if len(percents) == 0:
-			html_subdirs.append(generate_html([], "<tr><td><center>No perf data for this test</center></td></tr>", root_path, new_path, job, job))
+			html_subdirs.append(generate_html([], "<tr><td><center>No perf data for this test</center></td></tr>", root_path, new_path, job, job, ""))
 			continue
 			
-		html = ""
+		html = "<center>" + job_info + "</center><br>"
 		print "Bar chart of " + title + " (" + job + ")"
 		ordered_stats = []
 		titles = []
@@ -1237,7 +1263,7 @@ def barchart_perf_report(html_subdirs, root_path, path, stats, keys, title, symb
 		html += "]);\n"
 		html += '''
         var options = {
-          title: 'Perf Report: total system utilisation',
+          title: 'Perf Report: % utilisation',
 	  isStacked: true,
 	  bar: { groupWidth: "95%"},
 	  chartArea: {left:'15%',top:20,width:'70%',height:'95%'},
@@ -1250,7 +1276,7 @@ def barchart_perf_report(html_subdirs, root_path, path, stats, keys, title, symb
 	</script>
 	<div id="chart_div_''' + str(chart) + '''" style="width: ''' + str(default_width) + '''px; height: ''' + str(min(len(percents), threshold) * 16) + '''px"></div>
 	</td></tr></center>'''
-		html_subdirs.append(generate_html([], html, root_path, new_path, job, job))
+		html_subdirs.append(generate_html([], html, root_path, new_path, job, job, job_info))
 
 	return ""
 
@@ -1263,8 +1289,9 @@ def graph_samples(html_subdirs, root_path, path, key, stats, keys, title):
 	#
 	# Process data from each unique job:
 	#
-	html = ""
+	#html = "" CIK
 	for job in jobs:
+		job_info = job_info_get(job)
 		print "Bar charting " + title + " (" + job + ")"
 		ordered_stats = []
 		titles = []
@@ -1285,9 +1312,11 @@ def graph_samples(html_subdirs, root_path, path, key, stats, keys, title):
 		new_path = os.path.join(path, job)
 		mkdirp(new_path)
 
+		html = "<center>" + job_info + "</center><br>"
+
 		if len(ordered_stats):
-			html = plot_samples_raw_fio_data(new_path, key, keys, title, ordered_stats)
-			html_subdirs.append(generate_html([], html, root_path, new_path, job, job))
+			html = plot_samples_raw_fio_data(job, new_path, key, keys, title, ordered_stats)
+			html_subdirs.append(generate_html([], html, root_path, new_path, job, job, job_info))
 		else:
 			print "No relevant data can be found"
 
@@ -1333,6 +1362,8 @@ def compare_stats_ordered(html_subdirs, path, graph_func, stats, group_by_keys, 
 #  Bar chart of fs + tests on a given day
 #
 def daily_tests_barchart(html_dirs, root_path, date):
+	info = "Comparison of flexible I/O tester (fio) metrics such as Disk Read/Writes, CPU utilisation, etc., that are relevant to each test."
+	
 	tests = find_matching_stats(stats,
 		[
 			('Date', date),
@@ -1349,7 +1380,9 @@ def daily_tests_barchart(html_dirs, root_path, date):
 	html_subdirs = []
 	compare_stats_ordered(html_subdirs, newpath, bar_horiz, tests,
 		['IO Scheduler', 'Job', 'Filesystem'], ['Job', 'IO Scheduler'])
-	html_dirs.append(generate_html(html_subdirs, "", root_path, newpath, 'daily-tests-barchart', 'Fio metrics (across tests)' + ', '.join(date)))
+
+	html = "<center>" + info + "</center><br>"
+	html_dirs.append(generate_html(html_subdirs, html, root_path, newpath, 'daily-tests-barchart', 'Fio metrics' + ', '.join(date), info))
 
 #
 #  Samples of fs on a given day
@@ -1366,15 +1399,16 @@ def daily_tests_samples(html_dirs, root_path, date):
 	#
 	#  Process raw samples from fio logs
 	#
-	for (key, title, pattern, name) in samples_info:
+	for (key, title, pattern, name, hint) in samples_info:
 		new_path = os.path.join(root_path, name)
 		mkdirp(new_path)
 		html_subdirs = []
+		html = "<center>Note: these charts may take a while to render on a web browser</center>"
 		graph_samples(html_subdirs, root_path, new_path, key, tests, keys, title)
 		if len(date) > 0:
-			html_dirs.append(generate_html(html_subdirs, "", root_path, new_path, name, title + ": " + ', '.join(date)))
+			html_dirs.append(generate_html(html_subdirs, html, root_path, new_path, name, title + ": " + ', '.join(date), ""))
 		else:
-			html_dirs.append(generate_html(html_subdirs, "", root_path, new_path, name, title))
+			html_dirs.append(generate_html(html_subdirs, html, root_path, new_path, name, title, hint))
 
 #
 #  Flamegraphs of tests on given day
@@ -1392,12 +1426,15 @@ def daily_tests_flamegraph(html_dirs, root_path, date):
 	mkdirp(new_path)
 	html_subdirs = []
 	flamegraph_perf_data(html_subdirs, root_path, new_path, tests, keys, 'flamegraph')
-	html_dirs.append(generate_html(html_subdirs, "", root_path, new_path, 'flamegraph', "Perf flamegraph (by test) " + ', '.join(date)))
+	html_dirs.append(generate_html(html_subdirs, "", root_path, new_path, 'flamegraph', "Perf flamegraph (by test) " + ', '.join(date), ""))
 
 #
 #  Perf reports of tests on given day, all symbols
 #
 def daily_tests_perf_report(html_dirs, root_path, date):
+	info = "Utilisaton of CPU by each kernel function for each test (for all kernel symbols)"
+	html = "<center>" + info + "</center><br>"
+
 	tests = find_matching_stats(stats,
 		[
 			('Date', date),
@@ -1410,12 +1447,15 @@ def daily_tests_perf_report(html_dirs, root_path, date):
 	mkdirp(new_path)
 	html_subdirs = []
 	barchart_perf_report(html_subdirs, root_path, new_path, tests, keys, 'perfreport', [], 100000)
-	html_dirs.append(generate_html(html_subdirs, "", root_path, new_path, 'perfreport', "Perf Report (all symbols) (by test) " + ', '.join(date)))
+	html_dirs.append(generate_html(html_subdirs, html, root_path, new_path, 'perfreport', "Perf Report (all symbols) (by test) " + ', '.join(date), info))
 
 #
 #  Perf reports of tests on given day, reduced symbols
 #
 def daily_tests_perf_report_reduced(html_dirs, root_path, date):
+	info = "Utilisaton of CPU by each kernel function for each test (top 100 utilisation hits)"
+	html = "<center>" + info + "</center><br>"
+
 	tests = find_matching_stats(stats,
 		[
 			('Date', date),
@@ -1433,13 +1473,16 @@ def daily_tests_perf_report_reduced(html_dirs, root_path, date):
 	mkdirp(new_path)
 	html_subdirs = []
 	barchart_perf_report(html_subdirs, root_path, new_path, tests, keys, 'perfreport-reduced', symbols, 100)
-	html_dirs.append(generate_html(html_subdirs, "", root_path, new_path, 'perfreport-reduced', "Perf Report (reduced symbols, top 100) (by test) " + ', '.join(date)))
+	html_dirs.append(generate_html(html_subdirs, html, root_path, new_path, 'perfreport-reduced', "Perf Report (reduced symbols, top 100) (by test) " + ', '.join(date), info))
 
 
 #
 #  Plot trends by kernel
 #
 def kernel_trends(html_dirs, root_path):
+	info = "Chart the flexible I/O tester (fio) metrics for each test and compare these over different kernels"
+	html = "<center>" + info + "</center><br>"
+
 	new_path = os.path.join(root_path, 'kernel-trends')
 	mkdirp(new_path)
 
@@ -1457,6 +1500,8 @@ def kernel_trends(html_dirs, root_path):
 
 	html_subdirs = []
 	for job in jobs:
+		job_info = job_info_get(job)
+		html = "<center>" + job_info + "</center><br>"
 		html_jobsubdirs = []
 		print "Generating trends for job " + job
 		job_path = os.path.join(new_path, job)
@@ -1470,14 +1515,19 @@ def kernel_trends(html_dirs, root_path):
 			])
 		compare_stats_ordered(html_jobsubdirs, job_path, plot_horiz_trend, tests,
 			[ 'Job', 'Filesystem', 'IO Scheduler', 'Kernel-release'], ['Filesystem', 'IO Scheduler', 'Job'])
-		html_subdirs.append(generate_html(html_jobsubdirs, "", new_path, job_path, 'kernel-trends', job + ": " + 'trends by kernel'))
+		html_subdirs.append(generate_html(html_jobsubdirs, html, new_path, job_path, 'kernel-trends', job + ": " + 'trends by kernel', job_info))
 
-	html_dirs.append(generate_html(html_subdirs, "", root_path, new_path, 'kernel-trends', 'Fio metrics: trends by kernel'))
+	html = "<center>" + info + "</center><br>"
+	html_dirs.append(generate_html(html_subdirs, html, root_path, new_path, 'kernel-trends', 'Fio metrics: trends by kernel', info))
+
 
 #
 #  Plot perf trends by kernels
 #
 def kernel_perf_trends(html_dirs, root_path):
+	info = "Chart the utilisation for each of the top used 100 kernel symbols and compare these over different kernels"
+	html = "<center>" + info + "</center><br>"
+
 	new_path = os.path.join(root_path, 'overtime-perf-trends')
 	mkdirp(new_path)
 
@@ -1508,7 +1558,7 @@ def kernel_perf_trends(html_dirs, root_path):
 			])
 		plot_perf_horiz_trend(html_subdirs, job, new_path, tests)
 
-	html_dirs.append(generate_html(html_subdirs, "", root_path, new_path, 'overtime-trends', 'Perf trends by kernel (top 100 kernel symbols)'))
+	html_dirs.append(generate_html(html_subdirs, html, root_path, new_path, 'overtime-trends', 'Perf trends by kernel (top 100 kernel symbols)', info))
 #
 #  Gather up stats
 #
@@ -1532,5 +1582,4 @@ daily_tests_samples(html_dirs, tmpdir, dates)
 kernel_trends(html_dirs, tmpdir)
 kernel_perf_trends(html_dirs, tmpdir)
 
-
-generate_html(html_dirs, "", tmpdir, tmpdir, 'results', 'All results')
+generate_html(html_dirs, "", tmpdir, tmpdir, 'results', 'All results', "")
