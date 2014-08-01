@@ -138,7 +138,7 @@ samples_info = [
 	('Bandwidth',	'Fio I/O Bandwidth (MB/s)',		'job.*_bw\.log*', 	'daily-fio-stats-bandwidth'),
 	('IOops',	'Fio I/O operations (ops/s)', 		'job.*_iops\.log*', 	'daily-fio-stats-io-ops'),
 	('IOLatency',	'Fio I/O Latency (us)', 		'job.*_lat\.log*', 	'daily-fio-stats-io-latency'),
-	('IOCLatencty',	'Fio I/O Completion Latency (us)',	'job.*_clat\.log*', 	'daily-fio-stats-clatency') ]
+	('IOCLatentcy',	'Fio I/O Completion Latency (us)',	'job.*_clat\.log*', 	'daily-fio-stats-clatency') ]
 
 #
 #
@@ -312,7 +312,7 @@ def str_to_filename(str):
 def bar_horiz(html_subdirs, root_path, keys, config, collection):
 	title = config['Label']
 	units = config['Units']
-	print "Graphing " + title
+	print "Bar charting " + title
 	#
 	#  Filename based on title..
 	#
@@ -1265,7 +1265,7 @@ def graph_samples(html_subdirs, root_path, path, key, stats, keys, title):
 	#
 	html = ""
 	for job in jobs:
-		print "Graphing " + title + " (" + job + ")"
+		print "Bar charting " + title + " (" + job + ")"
 		ordered_stats = []
 		titles = []
 		for sysinfo in stats:
@@ -1371,7 +1371,10 @@ def daily_tests_samples(html_dirs, root_path, date):
 		mkdirp(new_path)
 		html_subdirs = []
 		graph_samples(html_subdirs, root_path, new_path, key, tests, keys, title)
-		html_dirs.append(generate_html(html_subdirs, "", root_path, new_path, name, title + ": " + ', '.join(date)))
+		if len(date) > 0:
+			html_dirs.append(generate_html(html_subdirs, "", root_path, new_path, name, title + ": " + ', '.join(date)))
+		else:
+			html_dirs.append(generate_html(html_subdirs, "", root_path, new_path, name, title))
 
 #
 #  Flamegraphs of tests on given day
@@ -1434,10 +1437,10 @@ def daily_tests_perf_report_reduced(html_dirs, root_path, date):
 
 
 #
-#  Plot trends over time
+#  Plot trends by kernel
 #
-def overtime_trends(html_dirs, root_path):
-	new_path = os.path.join(root_path, 'overtime-trends')
+def kernel_trends(html_dirs, root_path):
+	new_path = os.path.join(root_path, 'kernel-trends')
 	mkdirp(new_path)
 
 	kernel_release = []
@@ -1467,14 +1470,14 @@ def overtime_trends(html_dirs, root_path):
 			])
 		compare_stats_ordered(html_jobsubdirs, job_path, plot_horiz_trend, tests,
 			[ 'Job', 'Filesystem', 'IO Scheduler', 'Kernel-release'], ['Filesystem', 'IO Scheduler', 'Job'])
-		html_subdirs.append(generate_html(html_jobsubdirs, "", new_path, job_path, 'overtime-trends', job + ": " + 'trends over time'))
+		html_subdirs.append(generate_html(html_jobsubdirs, "", new_path, job_path, 'kernel-trends', job + ": " + 'trends by kernel'))
 
-	html_dirs.append(generate_html(html_subdirs, "", root_path, new_path, 'overtime-trends', 'Fio metrics: all trends over time'))
+	html_dirs.append(generate_html(html_subdirs, "", root_path, new_path, 'kernel-trends', 'Fio metrics: trends by kernel'))
 
 #
-#  Plot perf trends over time
+#  Plot perf trends by kernels
 #
-def overtime_perf_trends(html_dirs, root_path):
+def kernel_perf_trends(html_dirs, root_path):
 	new_path = os.path.join(root_path, 'overtime-perf-trends')
 	mkdirp(new_path)
 
@@ -1505,7 +1508,7 @@ def overtime_perf_trends(html_dirs, root_path):
 			])
 		plot_perf_horiz_trend(html_subdirs, job, new_path, tests)
 
-	html_dirs.append(generate_html(html_subdirs, "", root_path, new_path, 'overtime-trends', 'Perf trends over time (top 100 kernel symbols)'))
+	html_dirs.append(generate_html(html_subdirs, "", root_path, new_path, 'overtime-trends', 'Perf trends by kernel (top 100 kernel symbols)'))
 #
 #  Gather up stats
 #
@@ -1521,13 +1524,13 @@ for i in range(1, len(sys.argv)):
 
 mkdirp(tmpdir)
 
-#daily_tests_perf_report(html_dirs, tmpdir, dates)
-#daily_tests_perf_report_reduced(html_dirs, tmpdir, dates)
+daily_tests_perf_report(html_dirs, tmpdir, dates)
+daily_tests_perf_report_reduced(html_dirs, tmpdir, dates)
 #daily_tests_flamegraph(html_dirs, tmpdir, dates)
-#daily_tests_barchart(html_dirs, tmpdir, dates)
-#daily_tests_samples(html_dirs, tmpdir, dates)
-#overtime_trends(html_dirs, tmpdir)
-overtime_perf_trends(html_dirs, tmpdir)
+daily_tests_barchart(html_dirs, tmpdir, dates)
+daily_tests_samples(html_dirs, tmpdir, dates)
+kernel_trends(html_dirs, tmpdir)
+kernel_perf_trends(html_dirs, tmpdir)
 
 
 generate_html(html_dirs, "", tmpdir, tmpdir, 'results', 'All results')
