@@ -205,7 +205,7 @@ BASEDEV=$(basename $DEV | sed 's/[0-9]*//g')
 
 mk_fio
 
-ALL_JOBS=$(ls jobs | grep -v conf)
+ALL_JOBS=$(ls jobs | grep -v conf | grep -v info)
 
 for job in ${ALL_JOBS}
 do
