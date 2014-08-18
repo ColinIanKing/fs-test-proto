@@ -29,7 +29,7 @@ import string
 import errno
 import operator
 
-default_colors = [ '#ff0000', '#00ff00', '#0000ff' ]
+default_colors = [ '#ff0000', '#00ff00', '#0000ff', '#ff00ff', '#00ffff', '#ffff00' ]
 #
 # Default graph sizes in pixels
 #
@@ -487,6 +487,7 @@ def plot_horiz_trend(html_subdirs, path, keys, config, collection):
 	mkdirp(new_path)
 
 	chart = 0
+	html = ''
 
 	#
 	#  Generate a graph for each I/O scheduler found..
