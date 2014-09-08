@@ -444,7 +444,8 @@ def bar_horiz(html_subdirs, root_path, keys, config, collection):
 		html += "['Configuration', '" + title + " (" + units + ")'," + \
 			" { role: 'style' }],\n"
 
-		max_height = 35 * len(indexes) + 8
+		bar_height = 25 * len(indexes)
+		max_height = bar_height + 100
 		for i in indexes:
 			color = default_colors[fs.index(sysinfos[i]['Filesystem'])]
 			label = sysinfos[i]['Kernel-release'] + ", " + \
@@ -461,16 +462,17 @@ def bar_horiz(html_subdirs, root_path, keys, config, collection):
           title: ' ''' + xlabel + ": " + title + " (" + units + ") " + subtitle + ''' ',
           vAxis: {title: 'Configuration' },
           hAxis: {title: ' ''' + title + " (" + units + ")" + ''' ', minValue: 0 },
-	  chartArea: {left: ' ''' + str(10 * max_label_len) + ''' '},
-	  bar: {groupWidth: '90%'} ,
-	  legend: {position: 'none' }
+	  chartArea: {left: ' ''' + str(10 * max_label_len) + ''' ', height: ' ''' + str(bar_height) + ''' '},
+	  bar: {groupWidth: '90%'},
+	  legend: {position: 'none'},
+	  height: ''' + str(max_height) + ''' 
         };
 
         var chart = new google.visualization.BarChart(document.getElementById(''' + "'chart_div_" + str(chart) + "'" + '''));
         chart.draw(data, options);
       }
 	</script>
-	<div id="chart_div_''' + str(chart) + '''" style="width: ''' + str(default_width) + '''px; height: ''' + str(max_height) + '''px;"></div>'''
+	<div id="chart_div_''' + str(chart) + '''" style="width: ''' + str(default_width) + '''px"></div>'''
 		chart += 1
 
 	html_subdirs.append(generate_html([], html, root_path, newpath, filename, title, hint))
@@ -796,14 +798,16 @@ def plot_samples_raw_fio_data(job, root_path, key, keys, title, sysinfos):
 			"fill-opacity: 0.9'],\n"
 
 
-	max_height = 24 * len(indexes) + 8
+	bar_height = 25 * len(indexes)
+	max_height = bar_height + 100
 	html += "]);\n"
 	html += '''
         var options = {
           title: 'Mean ''' + title + ''' ',
           vAxis: {title: 'Configuration' },
 	  hAxis: {title: 'Mean ''' + title + ''' ', minValue: 0 },
-	  chartArea: {left: ' ''' + str(10 * max_label_len) + ''' ', height:'95%' },
+	  chartArea: {left: ' ''' + str(10 * max_label_len) + ''' ', height: ''' + str(bar_height) + '''},
+	  height: ''' + str(max_height) + ''',
 	  legend: {position: 'none' }
         };
 
