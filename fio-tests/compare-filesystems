@@ -104,7 +104,7 @@ def generate_html(html_subdirs, html, root_path, sub_path, html_file, title, hov
             <table width=100% cellspacing="2">'''
 	colors = [ "#ffffff", "#e0f0ff" ]
 	i = 0
-	for (t, f, h) in sorted(html_subdirs, key=lambda d: d[0]):
+	for (t, f, h) in sorted(html_subdirs, key=lambda d: d[1]):
 		common = os.path.commonprefix([sub_path, f])
 		relname = f[len(common)+1:]
 		page += '\n              <tr><td><center><a href="' + relname + '" title="' + h + '">' + t + '</a></center></td></tr>'
@@ -191,6 +191,17 @@ def mkdirp(path):
 		if exc.errno == errno.EEXIST and os.path.isdir(path):
 			pass
 		else: raise
+
+def kernel_canonical(kernel):
+	# 3.11.0-26-generic
+	# 3.17.0-031700rc1-generic
+	pattern = re.compile(r"""(\d*).(\d*).(\d*)-(\S*)-(\S*)""", re.VERBOSE)
+	m = pattern.match(kernel)
+        if m:
+		return "%4.4d.%4.4d.%4.4d-%s-%s" \
+			% (int(m.group(1)), int(m.group(2)), int(m.group(3)), m.group(4), m.group(5))
+	else:
+		return ""
 
 #
 #  Load sysinfo
@@ -1441,6 +1452,45 @@ def daily_tests_barchart(html_dirs, root_path, date):
 	html_dirs.append(generate_html(html_subdirs, html, root_path, newpath, 'daily-tests-barchart', 'Fio metrics' + ', '.join(date), info))
 
 #
+#  Bar chart of fs + tests by kernel
+#
+def kernel_tests_barchart(html_dirs, root_path):
+	info = "Comparison of flexible I/O tester (fio) metrics such as Disk Read/Writes, CPU utilisation, etc., that are relevant to each test."
+
+	kernels = find_unique_key_value_stats(stats, [], 'Kernel-release')
+	canonical_kernels = {}
+	for kernel in kernels:
+		canonical_kernels[kernel_canonical(kernel)] = kernel
+
+	new_path = os.path.join(root_path, 'kernel-tests-barchart')
+	mkdirp(new_path)
+
+	html_subdirs = []
+	for canonical_kernel in sorted(canonical_kernels):
+		kernel = canonical_kernels[canonical_kernel]
+		html = "<center>" + kernel + "</center><br>"
+		html_kernelsubdirs = []
+		print "Generating charts for kernel " + kernel
+		kernel_path = os.path.join(new_path, canonical_kernel)
+		mkdirp(kernel_path)
+
+		tests = find_matching_stats(stats,
+			[
+				('Kernel-release', [kernel])
+			])
+
+		#
+		# Compare filesystems
+		#
+		compare_stats_ordered(html_kernelsubdirs, kernel_path, bar_horiz, tests,
+			['IO Scheduler', 'Job', 'Filesystem'], ['Job', 'IO Scheduler'])
+	
+		html_subdirs.append(generate_html(html_kernelsubdirs, html, new_path, kernel_path, 'daily-tests-barchart', 'Fio metrics for ' + kernel , info))
+
+	html = ""
+	html_dirs.append(generate_html(html_subdirs, html, root_path, new_path, 'kernel-tests-barchart', 'Fio metrics by kernel', "Fio metrics by kernel"))
+
+#
 #  Samples of fs on a given day
 #
 def daily_tests_samples(html_dirs, root_path, date):
@@ -1632,10 +1682,15 @@ mkdirp(tmpdir)
 
 daily_tests_perf_report(html_dirs, tmpdir, dates)
 daily_tests_perf_report_reduced(html_dirs, tmpdir, dates)
-#daily_tests_flamegraph(html_dirs, tmpdir, dates)
-daily_tests_barchart(html_dirs, tmpdir, dates)
+daily_tests_flamegraph(html_dirs, tmpdir, dates)
 daily_tests_samples(html_dirs, tmpdir, dates)
 kernel_trends(html_dirs, tmpdir)
 kernel_perf_trends(html_dirs, tmpdir)
+
+kernel_tests_barchart(html_dirs, tmpdir)
+#
+# Maybe deprecate this
+# daily_tests_barchart(html_dirs, tmpdir, dates)
+
 
 generate_html(html_dirs, "", tmpdir, tmpdir, 'results', 'All results', "")
