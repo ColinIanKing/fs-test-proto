@@ -1517,6 +1517,46 @@ def daily_tests_samples(html_dirs, root_path, date):
 			html_dirs.append(generate_html(html_subdirs, html, root_path, new_path, name, title, hint))
 
 #
+#  Samples of fs for all kernels
+#
+def kernel_tests_samples(html_dirs, root_path):
+	kernels = find_unique_key_value_stats(stats, [], 'Kernel-release')
+	canonical_kernels = {}
+	for kernel in kernels:
+		canonical_kernels[kernel_canonical(kernel)] = kernel
+
+	new_path = os.path.join(root_path, 'kernel-tests-samples')
+	mkdirp(new_path)
+
+	html_subdirs = []
+	for canonical_kernel in sorted(canonical_kernels):
+		kernel = canonical_kernels[canonical_kernel]
+		html = "<center>" + kernel + "</center><br>"
+		print "Generating charts for kernel " + kernel
+		kernel_path = os.path.join(new_path, canonical_kernel)
+		mkdirp(kernel_path)
+
+		tests = find_matching_stats(stats,
+			[
+				('Kernel-release', [kernel])
+			])
+		keys = keys_variant_collection([tests])
+		html_kernelsubdirs = []
+		#
+		#  Process raw samples from fio logs
+		#
+		for (key, title, pattern, name, hint) in samples_info:
+			name_path = os.path.join(kernel_path, name)
+			mkdirp(name_path)
+			graph_subdirs = []
+			html = "<center><b>Note: these charts may take a while to render on a web browser<b></center><br>"
+			graph_samples(graph_subdirs, root_path, name_path, key, tests, keys, title)
+			html_kernelsubdirs.append(generate_html(graph_subdirs, html, root_path, name_path, name, title, hint))
+
+		html_subdirs.append(generate_html(html_kernelsubdirs, "", root_path, kernel_path, 'kernel-tests-samples', 'Fio samples by kernel ' + kernel, 'Fio samples by kernel ' + kernel))
+	html_dirs.append(generate_html(html_subdirs, "", root_path, new_path, 'kernel-tests-samples', 'Fio samples by kernel', "Fio samples by kernel"))
+
+#
 #  Flamegraphs of tests on given day
 #
 def daily_tests_flamegraph(html_dirs, root_path, date):
@@ -1680,17 +1720,18 @@ for i in range(1, len(sys.argv)):
 
 mkdirp(tmpdir)
 
-daily_tests_perf_report(html_dirs, tmpdir, dates)
-daily_tests_perf_report_reduced(html_dirs, tmpdir, dates)
-daily_tests_flamegraph(html_dirs, tmpdir, dates)
-daily_tests_samples(html_dirs, tmpdir, dates)
+#daily_tests_perf_report(html_dirs, tmpdir, dates)
+#daily_tests_perf_report_reduced(html_dirs, tmpdir, dates)
+#daily_tests_flamegraph(html_dirs, tmpdir, dates)
+
 kernel_trends(html_dirs, tmpdir)
 kernel_perf_trends(html_dirs, tmpdir)
-
 kernel_tests_barchart(html_dirs, tmpdir)
+kernel_tests_samples(html_dirs, tmpdir)
 #
 # Maybe deprecate this
 # daily_tests_barchart(html_dirs, tmpdir, dates)
+# daily_tests_samples(html_dirs, tmpdir, dates)
 
 
 generate_html(html_dirs, "", tmpdir, tmpdir, 'results', 'All results', "")
