@@ -197,12 +197,20 @@ def mkdirp(path):
 #
 def sysinfo_load(file):
 	sysinfo = {}
-	pattern = re.compile(r"""(\d*).(\d*).(\d*)-(\d*)-(\S*)""", re.VERBOSE)
+	# 3.11.0-26-generic
+	# 3.17.0-031700rc1-generic
+	pattern = re.compile(r"""(\d*).(\d*).(\d*)-(\S*)-(\S*)""", re.VERBOSE)
 
-	if os.path.isfile(file):
-		f = open(file, 'r')
-	else:
+	try:
 		f = gzip.open(file + '.gz')
+	except:
+		try:
+			f = open(file, 'r')
+		except:
+			print "Can't open " + file
+			return sysinfo
+
+	got_kernel_release = False
 
 	for line in f.read().splitlines():
 		if ':' in line:
@@ -222,10 +230,15 @@ def sysinfo_load(file):
 			if key == 'Kernel-release':
 				m = pattern.match(val)
         			if m:
+					got_kernel_release = True
 					sysinfo['Kernel-release-canonical'] = \
-						"%4.4d.%4.4d.%4.4d-%4.4d-%s" \
-						% (int(m.group(1)), int(m.group(2)), int(m.group(3)), int(m.group(4)), m.group(5))
+						"%4.4d.%4.4d.%4.4d-%s-%s" \
+						% (int(m.group(1)), int(m.group(2)), int(m.group(3)), m.group(4), m.group(5))
 	f.close()
+
+	if not got_kernel_release:
+		print "Did not find kernel release info for " + file
+		sys.exit("Failed")
 	return sysinfo
 
 #
