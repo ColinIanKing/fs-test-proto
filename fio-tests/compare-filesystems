@@ -484,8 +484,8 @@ def plot_horiz_trend(html_subdirs, path, keys, config, collection):
 	xlabel_map = { }
 	for (subtitle, xlabels, yvalues, xlabel, sysinfos) in collection:
 		for sysinfo in sysinfos:
-			human_xlabel = sysinfo['Kernel-release'] + " " + sysinfo['Date']
-			sort_xlabel = sysinfo['Kernel-release-canonical'] + " " + sysinfo['Date']
+			human_xlabel = sysinfo['Kernel-release']
+			sort_xlabel = sysinfo['Kernel-release-canonical'] 
 			xlabel_map[sort_xlabel] = human_xlabel
 
 			all_xlabels.add(sort_xlabel)
@@ -534,7 +534,7 @@ def plot_horiz_trend(html_subdirs, path, keys, config, collection):
 				for (subtitle, xlabels, yvalues, xlabel, sysinfos) in collection:
 					for j in range(0, len(sysinfos)):
 						sysinfo = sysinfos[j]
-						if xl == sysinfo['Kernel-release'] + " " + sysinfo['Date'] and \
+						if xl == sysinfo['Kernel-release'] and \
 						   sysinfo['Filesystem'] == fs and \
 						   sysinfo['IO Scheduler'] == io:
 							value = str(yvalues[j])
@@ -546,7 +546,9 @@ def plot_horiz_trend(html_subdirs, path, keys, config, collection):
 		html += '''
         var options = {
           title: ' ''' + io + ": " + title + " (" + units + ") " + subtitle + ''' ',
-          hAxis: {title: 'Run #' },
+          hAxis: {slantedTextAngle: 90, maxAlternation: 1, title:'Run #' },
+          height: 600,
+          chartArea: { top:50, height:300 },
           vAxis: {title: ' ''' + title + " (" + units + ")" + ''' ', minValue: 0  },
 	  interpolateNulls: true,
 	  pointShape: 'diamond',
@@ -557,7 +559,7 @@ def plot_horiz_trend(html_subdirs, path, keys, config, collection):
         chart.draw(data, options);
       }
 	</script>
-	<div id="chart_div_''' + io + '''" style="width: ''' + str(default_width) + '''px; height: ''' + str(default_height) + '''px;"></div>'''
+	<div id="chart_div_''' + io + '''" style="width: ''' + str(default_width) + '''px; height: ''' + str(600) + '''px;"></div>'''
 
 	html_subdirs.append(generate_html([], html, new_path, new_path, title, title, hint))
 
