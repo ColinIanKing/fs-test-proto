@@ -1805,7 +1805,7 @@ mkdirp(tmpdir)
 # The following graph trends on all data sets
 #
 kernel_trends(html_dirs, tmpdir)
-kernel_perf_trends(html_dirs, tmpdir)
+#kernel_perf_trends(html_dirs, tmpdir)
 kernel_tests_barchart(html_dirs, tmpdir)
 kernel_tests_samples(html_dirs, tmpdir)
 
