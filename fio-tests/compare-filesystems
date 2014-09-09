@@ -1792,18 +1792,21 @@ for i in range(1, len(sys.argv)):
 
 mkdirp(tmpdir)
 
+#
+# Daily tests run on one "daily" run of data
+#
 #daily_tests_perf_report(html_dirs, tmpdir, dates)
 #daily_tests_perf_report_reduced(html_dirs, tmpdir, dates)
 #daily_tests_flamegraph(html_dirs, tmpdir, dates)
+#daily_tests_barchart(html_dirs, tmpdir, dates)
+#daily_tests_samples(html_dirs, tmpdir, dates)
 
+#
+# The following graph trends on all data sets
+#
 kernel_trends(html_dirs, tmpdir)
 kernel_perf_trends(html_dirs, tmpdir)
 kernel_tests_barchart(html_dirs, tmpdir)
 kernel_tests_samples(html_dirs, tmpdir)
-#
-# Maybe deprecate this
-# daily_tests_barchart(html_dirs, tmpdir, dates)
-# daily_tests_samples(html_dirs, tmpdir, dates)
-
 
 generate_html(html_dirs, "", tmpdir, tmpdir, 'results', 'All results', "")
