@@ -923,7 +923,11 @@ def plot_samples_raw_fio_data(job, root_path, key, keys, title, sysinfos):
 		rows=32
 		cols=64
 		tick_interval = 5
-		heatmap, yedges, xedges = np.histogram2d(all_y, all_x, bins=(rows,cols))
+		#
+		# We add in the corner co-ordinates to force the histrogram2d
+		# cover the entire space, otherwise it will crop it
+		#
+		heatmap, yedges, xedges = np.histogram2d(all_y + [ 0, max_y, 0, max_y ], all_x + [ 0, 0, max_x, max_x ], bins=(rows,cols))
 
 		rows_delta = float(max_y) / float(tick_interval - 1)
 		cols_delta = float(max_x) / float(tick_interval)
