@@ -59,33 +59,25 @@ def generate_html(html_subdirs, html, root_path, sub_path, html_file, title, hov
  http-equiv="content-type">
   <link rel="stylesheet" href="http://kernel.ubuntu.com/media/kernel-style.css" type="text/css" media="screen" />
   <style>
-            div.index-bottom-section {
-                 border-radius: 0px;
-                    box-shadow: 0 1px 3px rgba(0,0,0,0.3);
-                    background: #f7f5f6;
-                       padding: 20px;
-                 margin-top: -16px;
-                       /*
-                 margin-bottom: 20px;
-                 */
-
-                     font-size: 11px;
-                   line-height: 16px;
-                         color: #333;
-            }
-
-            a {
-                         color: #333;
-            }
-
-            a:hover {
-               text-decoration: underline;
-            }
-
-            a:active a:link, a:visited {
-               text-decoration: none;
-            }
-
+    div.index-bottom-section {
+    border-radius: 0px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+    background: #f7f5f6;
+    padding: 20px;
+    margin-top: -16px;
+    font-size: 11px;
+    line-height: 16px;
+    color: #333;
+    }
+    a {
+      color: #333;
+    }
+    a:hover {
+      text-decoration: underline;
+    }
+    a:active a:link, a:visited {
+      text-decoration: none;
+    }
   </style>
   <title>''' + title + '''</title>
 </head>
