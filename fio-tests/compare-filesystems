@@ -257,7 +257,7 @@ def sysinfo_load(file):
 #
 def perf_report_load(file):
 	pattern1 = re.compile(r"""\s+(\d*\.\d+|\d+)%\s+(\d*\.\d+|\d+)%\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)""", re.VERBOSE)
-	# 0.00%               sh  [kernel.kallsyms]   [k] native_write_msr_safe  
+	# 0.00%               sh  [kernel.kallsyms]   [k] native_write_msr_safe
 	pattern2 = re.compile(r"""\s+(\d*\.\d+|\d+)%\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)""", re.VERBOSE)
 
 	if os.path.isfile(file):
@@ -411,13 +411,19 @@ def bar_horiz(html_subdirs, root_path, keys, config, collection):
 
 	max_label_len = 0
 	fs = set([])
-	labels = {}
+	kernels = set([])
+	schedulers = set([])
+	jobs = set([])
+	#labels = {}
 	for (subtitle, xlabels, yvalues, xlabel, sysinfos) in collection:
 		#
 		#  Collect up unique filesystems;
 		#  this allows us to determine how to color the bars
 		#
 		fs = fs.union({ sysinfo['Filesystem'] for sysinfo in sysinfos})
+		kernels = kernels.union({ sysinfo['Kernel-release'] for sysinfo in sysinfos})
+		schedulers = schedulers.union({ sysinfo['IO Scheduler'] for sysinfo in sysinfos})
+		jobs = jobs.union({ sysinfo['Job'] for sysinfo in sysinfos})
 		#
 		# get label and find longest one
 		#
@@ -428,7 +434,65 @@ def bar_horiz(html_subdirs, root_path, keys, config, collection):
 	fs = sorted(fs)
 
 	html = "<h3>Comparing " + hint + " by test, kernel, I/O scheduler and file system as measured by the flexible I/O tester (fio)</h3>"
-	chart = 0
+
+	values = {}
+	for (subtitle, xlabels, yvalues, xlabel, sysinfos) in collection:
+		indexes = range(len(sysinfos))
+		for i in indexes:
+			sysinfo = sysinfos[i]
+			key = sysinfo['Kernel-release'] + sysinfo['Filesystem'] + sysinfo['IO Scheduler'] + sysinfo['Job']
+			values[key] = yvalues[i]
+
+
+	html += '''
+	<script type="text/javascript">
+	google.load("visualization", "1", {packages:["corechart"]});
+	google.setOnLoadCallback(drawChart);
+	function drawChart() {
+        var data = google.visualization.arrayToDataTable([
+	'''
+	html += "['Configuration', "
+	for job in jobs:
+		html += "'" + job + "', "
+	html += " { role: 'annotation' }],\n"
+
+	bar_height = 0
+	for kernel in kernels:
+		for f in fs:
+			for scheduler in schedulers:
+				html += "['" + kernel + " " + f + " " + scheduler + "', "
+				for job in jobs:
+					key = kernel + f + scheduler + job
+					try:
+						v = values[key]
+					except:	
+						v = 0.0
+					html += str(v) + ","
+				html += "''],\n"
+				bar_height += 25
+
+	html += "]);\n"
+	max_height = bar_height + 100
+
+	html += '''
+        var options = {
+          title: 'Stacked results for all jobs: ''' + title + " (" + units + ") " + subtitle + ''' ',
+          vAxis: {title: 'Configuration' },
+          hAxis: {title: 'Total of ''' + title + " (" + units + ") for all tests" + ''' ', minValue: 0 },
+	  chartArea: {left: ' ''' + str(10 * max_label_len) + ''' ', height: ' ''' + str(bar_height) + ''' '},
+	  bar: {groupWidth: '90%'},
+	  isStacked: true,
+	  legend: { position: 'bottom'},
+	  height: ''' + str(max_height) + '''
+        };
+
+        var chart = new google.visualization.BarChart(document.getElementById(''' + "'chart_div_0'" + '''));
+        chart.draw(data, options);
+      }
+	</script>
+	<div id="chart_div_0" style="width: ''' + str(default_width) + '''px"></div>'''
+
+	chart = 1
 	for (subtitle, xlabels, yvalues, xlabel, sysinfos) in collection:
 		#
 		# sort by kernel and file system order
@@ -465,7 +529,7 @@ def bar_horiz(html_subdirs, root_path, keys, config, collection):
 	  chartArea: {left: ' ''' + str(10 * max_label_len) + ''' ', height: ' ''' + str(bar_height) + ''' '},
 	  bar: {groupWidth: '90%'},
 	  legend: {position: 'none'},
-	  height: ''' + str(max_height) + ''' 
+	  height: ''' + str(max_height) + '''
         };
 
         var chart = new google.visualization.BarChart(document.getElementById(''' + "'chart_div_" + str(chart) + "'" + '''));
@@ -498,7 +562,7 @@ def plot_horiz_trend(html_subdirs, path, keys, config, collection):
 	for (subtitle, xlabels, yvalues, xlabel, sysinfos) in collection:
 		for sysinfo in sysinfos:
 			human_xlabel = sysinfo['Kernel-release']
-			sort_xlabel = sysinfo['Kernel-release-canonical'] 
+			sort_xlabel = sysinfo['Kernel-release-canonical']
 			xlabel_map[sort_xlabel] = human_xlabel
 
 			all_xlabels.add(sort_xlabel)
