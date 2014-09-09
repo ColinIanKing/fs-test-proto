@@ -1736,7 +1736,7 @@ def kernel_trends(html_dirs, root_path):
 		html_subdirs.append(generate_html(html_jobsubdirs, html, new_path, job_path, 'kernel-trends', job + ": " + 'trends by kernel', job_info))
 
 	html = "<center>" + info + "</center><br>"
-	html_dirs.append(generate_html(html_subdirs, html, root_path, new_path, 'kernel-trends', 'Fio metrics: trends by kernel', info))
+	html_dirs.append(generate_html(html_subdirs, html, root_path, new_path, 'kernel-trends', 'Fio trends', info))
 
 
 #
