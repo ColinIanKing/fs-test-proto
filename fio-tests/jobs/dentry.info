@@ -1,0 +1,2 @@
+dentry test creates two hundred thousand similarly named files; this exercises
+the dentry cache and slab allocator
