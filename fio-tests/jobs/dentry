@@ -8,6 +8,6 @@ openfiles=16
 rw=write
 file_service_type=roundrobin
 create_on_open=1
-directory=tmp
+directory=${DIRECTORY}
 numjobs=1
 unlink=1
