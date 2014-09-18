@@ -1,0 +1,57 @@
+#!/bin/bash
+TARGET=gonzo
+TOOLS="git-core fio xfsprogs btrfs-tools libaio-dev libaccountsservice0 linux-tools-common linux-tools-generic"
+TOOLS="git-core fio xfsprogs btrfs-tools libaio-dev linux-tools-common linux-tools-generic"
+TOOLS="git-core fio xfsprogs btrfs-tools libaio-dev"
+DEV="/dev/sdb"
+DATE_START=$(date +%F)
+TIME_START=$(date +%H%M)
+#
+#  p - perf, S - normal stats
+#
+MODE=-S
+
+do_test()
+{
+	series=$1
+	iosched=$2
+	fs=$3
+	echo "Testing on gonzo $series, iosched $iosched"
+	echo "Provisioning.."
+ 	../kernel-testing/provision --sut=real --sut-series=${series} --sut-arch=amd64 gonzo 
+
+	echo "Installing tools"
+	ssh ${TARGET} "sudo apt-get -y -q install ${TOOLS}"
+	if [ $? -ne 0 ]; then
+		echo "Install tools failed."
+		exit 1
+	fi
+	
+	echo "Installing tests"
+	ssh ${TARGET} "sudo rm -rf fs-test-proto"
+	ssh ${TARGET} "git clone git://kernel.ubuntu.com/cking/fs-test-proto.git"
+
+	echo "Creating partition"
+	ssh ${TARGET} "sudo dd if=/dev/zero of=/dev/sdb bs=1M count=256"
+	ssh ${TARGET} "sudo umount ${DEV}1"
+	ssh ${TARGET} "sudo parted $DEV mklabel gpt"
+	ssh ${TARGET} "sudo parted -a optimal $DEV mkpart primary 0% 100%"
+	ssh ${TARGET} "sudo parted $DEV print"
+
+	echo "Running tests"
+	echo "fs='$fs'"
+	ssh ${TARGET} "cd fs-test-proto/fio-tests; sudo ./test.sh -d ${DEV}1 -m8G ${MODE} -s $iosched -f ${fs} -D ${DATE_START} -T ${TIME_START}"
+
+	echo "Copying results"
+	ssh ${TARGET} "sudo chown -R jenkins:jenkins fs-test-proto/fio-tests/results"
+	scp -r ${TARGET}:fs-test-proto/fio-tests/results .
+}
+
+for r in  utopic
+do
+	for io in cfq noop deadline
+	do
+		echo "Doing release $r, sched $io, fs $FS"
+		do_test $r $io ext2,ext3,ext4,xfs
+	done
+done

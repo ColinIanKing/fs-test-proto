@@ -1,0 +1,62 @@
+#!/bin/bash
+
+IGNORE_BELOW=3.16
+KERNELS=mainline-kernels-tested.log
+URL=http://kernel.ubuntu.com/~kernel-ppa/mainline/
+RELEASE=utopic
+
+get_kernel_versions()
+{
+	curl -s $URL | awk {'
+		i = index($0, "href")
+		if (i) {
+			str = substr($0, i)
+			i = index(str, "\"v")
+			if (i) {
+				str = substr(str, i + 1)
+				i = index(str, "\"")
+				print substr(str, 0, i-2)
+			}
+		}
+	'} | sort -V | awk -v ignore=${IGNORE_BELOW} {'
+		ignore_major = substr(ignore, 1, index(ignore, ".") - 1) + 0
+		ignore_minor = substr(ignore, index(ignore, ".") + 1) + 0
+		str = substr($0, 2)
+		major = substr(str, 1, index(str, ".") - 1) + 0
+		minor = substr(str, index(str, ".") + 1) 
+		minor = substr(minor, 1, index(minor, "-") - 1) + 0
+		if (major < ignore_major)
+			next
+		if (minor < ignore_minor)
+			next
+		print $0
+	'} | while read v
+	do
+		if [ -e $KERNELS ]; then
+			n=$(grep -c $v $KERNELS)
+			if [ $n -eq 0 ]; then
+				echo $v
+			fi
+		else
+			echo $v
+		fi
+	done
+}
+
+
+kerns=$(get_kernel_versions)
+echo "Found kernels to test: $kerns"
+for k in $kerns
+do
+	echo "Testing with $k from ${URL}${k}"
+
+	for io in cfq noop deadline
+	do
+		echo "Doing release $r, sched $io, fs $FS, kernel $k"
+		./provision-and-test ${RELEASE} $io ext2,ext3,ext4,xfs,btrfs ${URL}${k}
+	done
+	#
+	#  And add to tested log so we don't retest it
+	#
+	echo $k >> $KERNELS
+done

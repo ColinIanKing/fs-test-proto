@@ -1,0 +1,93 @@
+#!/bin/bash
+TARGET=gonzo
+TOOLS="git-core fio xfsprogs btrfs-tools libaio-dev libaccountsservice0 linux-tools-common linux-tools-generic"
+TOOLS="git-core fio xfsprogs btrfs-tools libaio-dev linux-tools-common linux-tools-generic"
+TOOLS="git-core fio xfsprogs btrfs-tools libaio-dev"
+DEV="/dev/sdb"
+DATE_START=$(date +%F)
+TIME_START=$(date +%H%M)
+#
+#  p - perf, S - normal stats
+#
+MODE=-S
+
+do_reboot()
+{
+	rc=1
+	ssh gonzo sudo reboot
+	sleep 10
+	i=0
+	
+	while [ $rc -ne 0 ]
+	do
+		ssh -qf gonzo exit
+		rc=$?
+		echo $rc
+		if [ $rc -ne 0 ]; then
+			sleep 10
+			echo "Waiting for ${TARGET} to reboot."
+		fi
+		i=$((i+1))
+		if [ $i -eq 90 ]; then
+			echo "${TARGET} failed to reboot in time."
+			echo "giving up!"
+			exit 1
+		fi
+	done
+}
+
+do_test()
+{
+	series=$1
+	iosched=$2
+	fs=$3
+	if [ x$4 == x ]; then
+		url=""
+	else
+		url="--sut-debs-url=$4"
+	fi
+	echo "Testing on gonzo $series, iosched $iosched"
+	echo "Provisioning.."
+ 	../kernel-testing/provision --sut=real --sut-series=${series} --sut-arch=amd64 $url gonzo 
+
+	kerns=$(ssh ${TARGET} dpkg -l | grep linux | grep lowlatency | awk '{print $2}')
+	if [ "x${kerns}" != x ]; then
+		echo "Removing lowlatency kernels"
+		ssh ${TARGET} sudo apt-get -y -q purge $kerns
+		do_reboot
+	fi
+
+	echo "Installing tools"
+	ssh ${TARGET} "sudo apt-get -y -q install ${TOOLS}"
+	if [ $? -ne 0 ]; then
+		echo "Install tools failed."
+		exit 1
+	fi
+	
+	echo "Installing tests"
+	ssh ${TARGET} "sudo rm -rf fs-test-proto"
+	ssh ${TARGET} "git clone git://kernel.ubuntu.com/cking/fs-test-proto.git"
+
+	echo "Creating partition"
+	ssh ${TARGET} "sudo dd if=/dev/zero of=/dev/sdb bs=1M count=256"
+	ssh ${TARGET} "sudo umount ${DEV}1"
+	ssh ${TARGET} "sudo parted $DEV mklabel gpt"
+	ssh ${TARGET} "sudo parted -a optimal $DEV mkpart primary 0% 100%"
+	ssh ${TARGET} "sudo parted $DEV print"
+
+	echo "Running tests"
+	echo "fs='$fs'"
+	ssh ${TARGET} "cd fs-test-proto/fio-tests; sudo ./test.sh -d ${DEV}1 -m8G ${MODE} -s $iosched -f ${fs} -D ${DATE_START} -T ${TIME_START}"
+
+	echo "Copying results"
+	ssh ${TARGET} "sudo chown -R jenkins:jenkins fs-test-proto/fio-tests/results"
+	scp -r ${TARGET}:fs-test-proto/fio-tests/results .
+}
+
+
+# example:
+#    do_test utopic cfq ext2,ext3,ext4,xfs http://kernel.ubuntu.com/~kernel-ppa/mainline/v3.17-rc1-utopic/
+#    do_test utopic noop ext2,ext3,ext4
+echo $#
+echo "provision-and-test release iosched filesystems [URL]"
+do_test $*
