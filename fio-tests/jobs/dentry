@@ -11,3 +11,7 @@ create_on_open=1
 directory=${DIRECTORY}
 numjobs=1
 unlink=1
+log_avg_msec=${LOG_AVG_MSEC}
+write_bw_log=job1
+write_lat_log=job1
+write_iops_log=job1
