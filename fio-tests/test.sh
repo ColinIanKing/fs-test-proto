@@ -38,16 +38,16 @@ do_fs_new()
 	#
 	#  Zap the partition
 	#
-	dd if=/dev/zero of=$DEV bs=1M count=64
+	dd if=/dev/zero of=$DEV bs=1M count=64 > /dev/null 2>&1
 
 	case $1 in
 	ext2)
-		mkfs.ext2 -F $DEV
+		mkfs.ext2 -F $DEV > /dev/null 2>&1
 		if [ $? -ne 0 ]; then
 			#
 			#  Older versions don't have -F option
 			#
-			mkfs.ext2 $DEV
+			mkfs.ext2 $DEV > /dev/null 2>&1
 			if [ $? -ne 0 ]; then
 				return 1
 			fi
@@ -55,12 +55,12 @@ do_fs_new()
 		mount $DEV $MNT
 		;;
 	ext3)
-		mkfs.ext3 -F $DEV
+		mkfs.ext3 -F $DEV > /dev/null 2>&1
 		if [ $? -ne 0 ]; then
 			#
 			#  Older versions don't have -F option
 			#
-			mkfs.ext3 $DEV
+			mkfs.ext3 $DEV > /dev/null 2>&1
 			if [ $? -ne 0 ]; then
 				return 1
 			fi
@@ -69,12 +69,12 @@ do_fs_new()
 		;;
 			
 	ext4)
-		mkfs.ext4 -F $DEV
+		mkfs.ext4 -F $DEV > /dev/null 2>&1
 		if [ $? -ne 0 ]; then
 			#
 			#  Older versions don't have -F option
 			#
-			mkfs.ext4 $DEV
+			mkfs.ext4 $DEV > /dev/null 2>&1
 			if [ $? -ne 0 ]; then
 				return 1
 			fi
@@ -82,25 +82,25 @@ do_fs_new()
 		mount $DEV $MNT
 		;;
 	xfs)
-		mkfs.xfs -f $DEV
+		mkfs.xfs -f $DEV > /dev/null 2>&1
 		if [ $? -ne 0 ]; then
 			#
 			#  Older versions don't have -f option
 			#
-			mkfs.xfs $DEV
+			mkfs.xfs $DEV > /dev/null 2>&1
 			if [ $? -ne 0 ]; then
 				return 1
 			fi
 		fi
-		mount $DEV $MNT
+		mount $DEV $MNT > /dev/null 2>&1
 		;;
 	btrfs)
-		mkfs.btrfs -f $DEV
+		mkfs.btrfs -f $DEV > /dev/null 2>&1
 		if [ $? -ne 0 ]; then
 			#
 			#  Older versions don't have -f option
 			#
-			mkfs.btrfs $DEV
+			mkfs.btrfs $DEV > /dev/null 2>&1
 			if [ $? -ne 0 ]; then
 				return 1
 			fi
@@ -108,12 +108,12 @@ do_fs_new()
 		mount $DEV $MNT
 		;;
 	*)
-		mkfs.ext4 -F $DEV
+		mkfs.ext4 -F $DEV > /dev/null 2>&1
 		if [ $? -ne 0 ]; then
 			#
 			#  Older versions don't have -F option
 			#
-			mkfs.ext4 $DEV
+			mkfs.ext4 $DEV > /dev/null 2>&1
 			if [ $? -ne 0 ]; then
 				return 1
 			fi
