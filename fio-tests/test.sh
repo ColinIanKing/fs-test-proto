@@ -107,6 +107,11 @@ do_fs_new()
 		fi
 		mount $DEV $MNT
 		;;
+	zfs)
+		zpool create pool /dev/sdb
+		zfs create pool/testpool
+		mount --bind /pool/testpool $MNT
+		;;
 	*)
 		mkfs.ext4 -F $DEV > /dev/null 2>&1
 		if [ $? -ne 0 ]; then
@@ -123,6 +128,19 @@ do_fs_new()
 	esac
 
 	return 0
+}
+
+do_umount()
+{
+	case $1 in
+	zfs)
+		umount $MNT
+		zfs destroy pool/testpool
+		zpool destroy pool
+		;;
+	*)
+		umount $MNT
+	esac
 }
 
 if [ $UID -ne 0 ]; then
@@ -177,6 +195,13 @@ if [ -z $FS ]; then
 	exit 1
 fi
 
+if [ $FS == "zfs" ]; then
+	if  [ $IOSCHED != "noop" ]; then
+		echo "Skipping IOSCHED $IOSCHED for $FS"
+		exit 0
+	fi
+fi
+
 FS=$(echo $FS | tr ',' ' ')
 
 if [ -z $IOSCHED ]; then
@@ -217,7 +242,7 @@ do
 			echo "Job: $job, Size $sz, IOsched $IOSCHED"
 			echo ${IOSCHED} > /sys/block/$BASEDEV/queue/scheduler
 			LOG_AVG_MSEC=${LOG_AVG_MSEC} DATE_START=${DATE_START} TIME_START=${TIME_START} RUNTIME=${RUNTIME} SIZE=${MIN_FILE_SIZE} DIRECTORY=$MNT ./fio.sh $MODE -j $job -F ${FIO}
-			umount $MNT
+			do_umount $fs
 		fi
 	done
 done
